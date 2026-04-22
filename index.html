@@ -3,273 +3,319 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI 마케팅 도우미 — 우리 가게 마케팅 60초 진단</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <link rel="stylesheet" href="css/style.css" />
+  <title>AI 마케팅 도우미</title>
+  <meta name="description" content="업체명, 이메일, 업종, URL을 입력하면 업종별 마케팅 진단 결과를 미리 확인할 수 있는 실행형 페이지" />
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-
-  <!-- ===== HEADER ===== -->
-  <header class="site-header">
-    <div class="container header-inner">
-      <a href="#" class="logo">
-        <span class="logo-icon"><i class="fa-solid fa-chart-line"></i></span>
-        <span class="logo-text">AI 마케팅 도우미</span>
-      </a>
-      <span class="header-badge">무료 · 로그인 불필요</span>
-    </div>
-  </header>
-
-  <!-- ===== HERO + 입력 폼 ===== -->
-  <main>
-    <section id="hero" class="hero-section">
-      <div class="container">
-        <div class="hero-copy">
-          <h1 class="hero-title">우리 가게 마케팅<br /><em>60초</em> AI 진단</h1>
-          <p class="hero-sub">업체명과 업종만 입력하면<br />마케팅 점수 · 핵심 문제 · 실행 전략 · PDF 리포트를 즉시 제공합니다.</p>
-        </div>
-
-        <!-- ===== STEP 1: 기본 정보 ===== -->
-        <div class="form-card" id="step-1">
-          <div class="step-label"><span>STEP 1</span> 기본 정보 입력</div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label for="biz-name">업체명 <span class="req">*</span></label>
-              <input type="text" id="biz-name" placeholder="예: 강남 스킨케어 클리닉" maxlength="50" />
-            </div>
-            <div class="form-group">
-              <label for="biz-email">이메일 <span class="req">*</span></label>
-              <input type="email" id="biz-email" placeholder="리포트 받을 이메일 주소" />
-            </div>
-          </div>
-
-          <!-- ===== STEP 2: 업종 선택 ===== -->
-          <div class="step-label mt-24"><span>STEP 2</span> 업종 카테고리 선택</div>
-          <p class="step-hint">해당하는 카테고리 하나를 선택하세요</p>
-
-          <div class="category-grid" id="category-grid">
-
-            <div class="cat-card" data-cat="local" tabindex="0">
-              <div class="cat-icon"><i class="fa-solid fa-map-location-dot"></i></div>
-              <div class="cat-body">
-                <strong>로컬 서비스형</strong>
-                <span class="cat-sub">네이버 지도 기반</span>
-                <ul class="cat-list">
-                  <li>식당 · 카페</li>
-                  <li>미용실 · 네일샵</li>
-                  <li>헬스장 · 필라테스</li>
-                  <li>학원 · 교습소</li>
-                </ul>
-              </div>
-              <div class="cat-check"><i class="fa-solid fa-circle-check"></i></div>
-            </div>
-
-            <div class="cat-card" data-cat="professional" tabindex="0">
-              <div class="cat-icon"><i class="fa-solid fa-user-tie"></i></div>
-              <div class="cat-body">
-                <strong>고관여 전문직형</strong>
-                <span class="cat-sub">신뢰 및 권위 기반</span>
-                <ul class="cat-list">
-                  <li>병원 · 치과 · 한의원</li>
-                  <li>법률 · 세무 · 회계</li>
-                  <li>부동산 분양 · 컨설팅</li>
-                  <li>성형 · 피부과</li>
-                </ul>
-              </div>
-              <div class="cat-check"><i class="fa-solid fa-circle-check"></i></div>
-            </div>
-
-            <div class="cat-card" data-cat="ecommerce" tabindex="0">
-              <div class="cat-icon"><i class="fa-solid fa-bag-shopping"></i></div>
-              <div class="cat-body">
-                <strong>이커머스형</strong>
-                <span class="cat-sub">비주얼 및 성과 광고 기반</span>
-                <ul class="cat-list">
-                  <li>의류 · 패션</li>
-                  <li>화장품 · 뷰티</li>
-                  <li>건강기능식품</li>
-                  <li>생활용품 쇼핑몰</li>
-                </ul>
-              </div>
-              <div class="cat-check"><i class="fa-solid fa-circle-check"></i></div>
-            </div>
-
-            <div class="cat-card" data-cat="b2b" tabindex="0">
-              <div class="cat-icon"><i class="fa-solid fa-building"></i></div>
-              <div class="cat-body">
-                <strong>B2B / IT 서비스형</strong>
-                <span class="cat-sub">논리 및 SEO 기반</span>
-                <ul class="cat-list">
-                  <li>SaaS · 솔루션</li>
-                  <li>제조 공장</li>
-                  <li>마케팅 대행사</li>
-                  <li>기업 대상 서비스</li>
-                </ul>
-              </div>
-              <div class="cat-check"><i class="fa-solid fa-circle-check"></i></div>
-            </div>
-
-            <div class="cat-card" data-cat="knowledge" tabindex="0">
-              <div class="cat-icon"><i class="fa-solid fa-lightbulb"></i></div>
-              <div class="cat-body">
-                <strong>무형 자산 / 지식 창업형</strong>
-                <span class="cat-sub">팬덤 기반</span>
-                <ul class="cat-list">
-                  <li>온라인 강의 · 코칭</li>
-                  <li>전자책 · 디지털 제품</li>
-                  <li>유튜버 · 크리에이터</li>
-                  <li>커뮤니티 비즈니스</li>
-                </ul>
-              </div>
-              <div class="cat-check"><i class="fa-solid fa-circle-check"></i></div>
-            </div>
-
-          </div><!-- /category-grid -->
-
-          <!-- 추가 정보 (선택) -->
-          <div class="optional-section" id="optional-section" style="display:none;">
-            <div class="step-label mt-24"><span>STEP 3</span> 추가 정보 <em class="opt-tag">선택 — 입력할수록 분석이 정확해집니다</em></div>
-            <div class="form-row">
-              <div class="form-group">
-                <label for="biz-url">웹사이트 / 인스타 / 스마트플레이스 URL</label>
-                <input type="url" id="biz-url" placeholder="https://" />
-              </div>
-              <div class="form-group">
-                <label for="biz-concern">현재 가장 큰 마케팅 고민</label>
-                <input type="text" id="biz-concern" placeholder="예: 인스타 팔로워는 있는데 문의가 없어요" maxlength="100" />
-              </div>
-            </div>
-          </div>
-
-          <div class="form-actions">
-            <button class="btn-optional" id="btn-optional" type="button">
-              <i class="fa-solid fa-plus"></i> 추가 정보 입력 (선택)
-            </button>
-            <button class="btn-analyze" id="btn-analyze" type="button">
-              <i class="fa-solid fa-magnifying-glass-chart"></i> 분석 시작
-            </button>
-          </div>
-
-          <p class="form-notice"><i class="fa-solid fa-lock"></i> 로그인 불필요 · 1일 1회 무료 · 입력 정보는 분석에만 사용됩니다</p>
-        </div><!-- /form-card -->
-
-        <!-- ===== 분석 중 ===== -->
-        <div class="analyzing-card" id="step-analyzing" style="display:none;">
-          <div class="analyzing-inner">
-            <div class="spinner-ring"></div>
-            <h2 class="analyzing-title">AI가 분석 중입니다</h2>
-            <p class="analyzing-sub" id="analyzing-status">업종 데이터를 수집하는 중...</p>
-            <div class="progress-bar-wrap">
-              <div class="progress-bar" id="progress-bar"></div>
-            </div>
-            <div class="analyzing-steps" id="analyzing-steps">
-              <div class="astep" id="astep-1"><i class="fa-solid fa-circle-notch fa-spin"></i> 업종 기준 데이터 로드</div>
-              <div class="astep pending" id="astep-2"><i class="fa-regular fa-circle"></i> 채널 현황 진단</div>
-              <div class="astep pending" id="astep-3"><i class="fa-regular fa-circle"></i> 마케팅 점수 산출</div>
-              <div class="astep pending" id="astep-4"><i class="fa-regular fa-circle"></i> 전략 리포트 생성</div>
-            </div>
+  <div class="site-shell">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand-wrap">
+          <div class="brand-mark">A</div>
+          <div class="brand-copy">
+            <div class="brand-name">AI 마케팅 도우미</div>
+            <div class="brand-sub">실행형 진단 페이지</div>
           </div>
         </div>
 
-        <!-- ===== 결과 화면 ===== -->
-        <div class="result-section" id="step-result" style="display:none;">
+        <div class="topbar-right">
+          <span class="soft-badge">Beta</span>
+          <span class="topbar-meta">로그인 없이 간편 진단</span>
+        </div>
+      </div>
+    </header>
 
-          <!-- 결과 헤더 -->
-          <div class="result-header">
-            <div class="result-score-wrap">
-              <canvas id="scoreChart" width="160" height="160"></canvas>
-              <div class="score-center" id="score-center">
-                <span class="score-num" id="score-num">0</span>
-                <span class="score-label">/ 100</span>
-              </div>
-            </div>
-            <div class="result-meta">
-              <div class="result-badge" id="result-badge">진단 완료</div>
-              <h2 class="result-biz-name" id="result-biz-name">—</h2>
-              <p class="result-cat-label" id="result-cat-label">—</p>
-              <p class="result-date" id="result-date">—</p>
-            </div>
-          </div>
-
-          <!-- 점수 세부 -->
-          <div class="score-breakdown" id="score-breakdown">
-            <h3 class="section-title">항목별 점수</h3>
-            <div class="breakdown-grid" id="breakdown-grid"></div>
-          </div>
-
-          <!-- 핵심 문제 -->
-          <div class="problems-section">
-            <h3 class="section-title"><i class="fa-solid fa-triangle-exclamation"></i> 핵심 문제 3가지</h3>
-            <div class="problems-grid" id="problems-grid"></div>
-          </div>
-
-          <!-- 전략 -->
-          <div class="strategy-section">
-            <h3 class="section-title"><i class="fa-solid fa-road"></i> 마케팅 실행 전략</h3>
-            <div class="strategy-tabs">
-              <button class="stab active" data-tab="short">단기 (2주)</button>
-              <button class="stab" data-tab="mid">중기 (1~3개월)</button>
-              <button class="stab" data-tab="long">장기 (3~6개월)</button>
-            </div>
-            <div class="strategy-content" id="strategy-content"></div>
-          </div>
-
-          <!-- CTA 버튼 -->
-          <div class="result-cta">
-            <button class="btn-pdf" id="btn-pdf" type="button">
-              <i class="fa-solid fa-file-pdf"></i> PDF 리포트 내려받기
-            </button>
-            <button class="btn-deep" id="btn-deep" type="button">
-              <i class="fa-solid fa-brain"></i> 심층 분석 요청하기
-            </button>
-          </div>
-
-          <div class="result-reset">
-            <button class="btn-reset" id="btn-reset" type="button">
-              <i class="fa-solid fa-rotate-left"></i> 다른 업체 분석하기
-            </button>
-          </div>
-
-        </div><!-- /result-section -->
-
-        <!-- ===== 심층 분석 모달 ===== -->
-        <div class="modal-overlay" id="modal-deep" style="display:none;">
-          <div class="modal-box">
-            <button class="modal-close" id="modal-close"><i class="fa-solid fa-xmark"></i></button>
-            <div class="modal-icon"><i class="fa-solid fa-brain"></i></div>
-            <h3 class="modal-title">심층 분석 요청</h3>
-            <p class="modal-desc">전문가가 직접 검토하고 맞춤 전략을 제안드립니다.<br />48시간 이내 이메일로 결과를 보내드립니다.</p>
-            <div class="modal-form">
-              <input type="tel" id="modal-phone" placeholder="연락처 (선택)" maxlength="15" />
-              <textarea id="modal-message" rows="3" placeholder="추가로 알려주실 내용 (선택)"></textarea>
-              <button class="btn-modal-submit" id="btn-modal-submit" type="button">심층 분석 신청</button>
-            </div>
-            <div class="modal-success" id="modal-success" style="display:none;">
-              <i class="fa-solid fa-circle-check"></i>
-              <p>신청이 완료되었습니다!<br />이메일로 결과를 보내드리겠습니다.</p>
-            </div>
-          </div>
+    <main class="page">
+      <section class="hero-minimal">
+        <div class="hero-left">
+          <span class="eyebrow">업종 맞춤 진단</span>
+          <h1>내 업종에 맞는 마케팅 진단 리포트</h1>
+          <p>
+            업체명, 이메일, 대표 URL 하나만 입력하고 바로 시작하세요.
+            서비스 소개보다 실행을 우선하는 화면으로 구성했습니다.
+          </p>
         </div>
 
-      </div><!-- /container -->
-    </section>
-  </main>
+        <div class="hero-right">
+          <div class="hero-mini-card">
+            <div class="mini-label">현재 상태</div>
+            <div class="mini-value">분석 대기 중</div>
+            <div class="mini-desc">입력 후 바로 결과 프리뷰가 생성됩니다</div>
+          </div>
+        </div>
+      </section>
 
-  <!-- ===== FOOTER ===== -->
-  <footer class="site-footer">
-    <div class="container footer-inner">
-      <span class="footer-brand">AI 마케팅 도우미</span>
-      <span class="footer-copy">© 2026 · 로그인 불필요 · 1일 1회 무료 진단</span>
-    </div>
-  </footer>
+      <section class="workspace">
+        <div class="workspace-grid">
+          <!-- 왼쪽: 입력 패널 -->
+          <aside class="panel form-panel">
+            <div class="panel-head">
+              <div>
+                <div class="panel-kicker">STEP 1</div>
+                <h2>기본 정보 입력</h2>
+              </div>
+              <span class="line-badge">필수 입력</span>
+            </div>
 
-  <script src="js/main.js"></script>
+            <form id="analysisForm" class="analysis-form">
+              <div class="field-group">
+                <label for="company">업체명</label>
+                <input
+                  id="company"
+                  type="text"
+                  placeholder="예: OO카페, OO법률사무소, OO스토어"
+                />
+              </div>
+
+              <div class="field-group">
+                <label for="email">이메일</label>
+                <input
+                  id="email"
+                  type="email"
+                  placeholder="예: hello@example.com"
+                />
+              </div>
+
+              <div class="field-group">
+                <label for="url">웹사이트 또는 대표 채널 URL</label>
+                <input
+                  id="url"
+                  type="text"
+                  placeholder="예: https://example.com / 인스타 / 유튜브 / 스마트스토어 링크"
+                />
+              </div>
+
+              <div class="field-group">
+                <div class="field-head">
+                  <label>업종 카테고리 선택</label>
+                  <span class="field-note">단일 선택</span>
+                </div>
+
+                <div class="category-grid" id="categoryGrid">
+                  <button type="button" class="category-card" data-category="local">
+                    <div class="category-icon">📍</div>
+                    <div class="category-title">로컬 서비스형</div>
+                    <div class="category-desc">네이버 지도 기반</div>
+                    <div class="category-example">식당, 카페, 미용실, 헬스장, 학원 등</div>
+                  </button>
+
+                  <button type="button" class="category-card" data-category="professional">
+                    <div class="category-icon">🧑‍⚖️</div>
+                    <div class="category-title">고관여 전문직형</div>
+                    <div class="category-desc">신뢰 및 권위 기반</div>
+                    <div class="category-example">병원, 법률, 세무, 부동산 분양, 컨설팅 등</div>
+                  </button>
+
+                  <button type="button" class="category-card" data-category="ecommerce">
+                    <div class="category-icon">🛒</div>
+                    <div class="category-title">이커머스형</div>
+                    <div class="category-desc">비주얼 및 성과 광고 기반</div>
+                    <div class="category-example">의류, 화장품, 건강기능식품, 생활용품 등 쇼핑몰</div>
+                  </button>
+
+                  <button type="button" class="category-card" data-category="b2b">
+                    <div class="category-icon">💼</div>
+                    <div class="category-title">B2B/IT 서비스형</div>
+                    <div class="category-desc">논리 및 SEO 기반</div>
+                    <div class="category-example">SaaS 솔루션, 제조 공장, 대행사, 기업 대상 서비스</div>
+                  </button>
+
+                  <button type="button" class="category-card" data-category="knowledge">
+                    <div class="category-icon">💡</div>
+                    <div class="category-title">무형 자산/지식 창업형</div>
+                    <div class="category-desc">팬덤 기반</div>
+                    <div class="category-example">온라인 강의, 전자책, 유튜버, 커뮤니티 비즈니스</div>
+                  </button>
+                </div>
+              </div>
+
+              <div class="action-stack">
+                <button type="submit" id="analyzeBtn" class="btn btn-primary btn-lg">
+                  분석하기
+                </button>
+                <div class="form-help">
+                  현재 버전은 프론트 데모이며, 다음 단계에서 실제 API와 PDF 다운로드를 연결합니다.
+                </div>
+              </div>
+            </form>
+          </aside>
+
+          <!-- 오른쪽: 상태 및 결과 패널 -->
+          <section class="panel result-panel">
+            <div class="panel-head result-head">
+              <div>
+                <div class="panel-kicker">STEP 2</div>
+                <h2>진단 상태 및 결과</h2>
+              </div>
+              <span class="line-badge" id="statusBadge">대기 중</span>
+            </div>
+
+            <div id="idleState" class="state-card state-idle">
+              <div class="state-icon">🧭</div>
+              <div class="state-title">입력 후 분석을 시작하세요</div>
+              <div class="state-text">
+                업체 정보와 업종 카테고리를 입력하면 오른쪽 패널에 결과 프리뷰가 생성됩니다.
+              </div>
+
+              <div class="idle-preview-grid">
+                <div class="preview-box">
+                  <div class="preview-label">마케팅 점수</div>
+                  <div class="preview-placeholder">--</div>
+                </div>
+                <div class="preview-box">
+                  <div class="preview-label">핵심 진단</div>
+                  <div class="preview-placeholder">3개 항목</div>
+                </div>
+                <div class="preview-box">
+                  <div class="preview-label">실행 방향</div>
+                  <div class="preview-placeholder">단기 / 중기 / 장기</div>
+                </div>
+                <div class="preview-box">
+                  <div class="preview-label">리포트</div>
+                  <div class="preview-placeholder">PDF 프리뷰</div>
+                </div>
+              </div>
+            </div>
+
+            <div id="loadingState" class="state-card hidden">
+              <div class="loading-top">
+                <div>
+                  <div class="state-title">분석 중입니다</div>
+                  <div class="state-text" id="loadingText">입력값을 확인하고 있습니다...</div>
+                </div>
+                <div class="loader-ring"></div>
+              </div>
+
+              <div class="progress-wrap">
+                <div class="progress-bar">
+                  <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-meta">
+                  <span id="progressPercent">0%</span>
+                  <span>예상 소요: 약 3초</span>
+                </div>
+              </div>
+
+              <div class="loading-steps">
+                <div class="loading-step active" id="step1">입력 정보 확인</div>
+                <div class="loading-step" id="step2">업종 기준 분석</div>
+                <div class="loading-step" id="step3">결과 요약 생성</div>
+                <div class="loading-step" id="step4">리포트 구성</div>
+              </div>
+            </div>
+
+            <div id="resultState" class="hidden">
+              <div class="result-top-grid">
+                <div class="score-widget">
+                  <div class="score-ring" id="scoreRing">
+                    <div class="score-ring-inner">
+                      <div class="score-caption">마케팅 점수</div>
+                      <div class="score-value" id="scoreValue">72</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="score-summary">
+                  <div class="summary-top">
+                    <span class="soft-badge">예시 결과</span>
+                    <span class="summary-category" id="selectedCategoryText">로컬 서비스형</span>
+                  </div>
+                  <h3 id="summaryTitle">현재 온라인 존재감은 있으나 전환 구조 보강이 필요합니다</h3>
+                  <p id="summaryText">
+                    입력된 업종 기준으로 보았을 때, 메시지 정리와 전환 동선 개선이 우선 과제로 보입니다.
+                  </p>
+
+                  <div class="metric-bars">
+                    <div class="metric-row">
+                      <div class="metric-label">메시지 명확성</div>
+                      <div class="metric-bar"><span id="barMessage"></span></div>
+                      <div class="metric-num" id="numMessage">68</div>
+                    </div>
+                    <div class="metric-row">
+                      <div class="metric-label">전환 구조</div>
+                      <div class="metric-bar"><span id="barConversion"></span></div>
+                      <div class="metric-num" id="numConversion">62</div>
+                    </div>
+                    <div class="metric-row">
+                      <div class="metric-label">채널 일관성</div>
+                      <div class="metric-bar"><span id="barConsistency"></span></div>
+                      <div class="metric-num" id="numConsistency">71</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="result-grid">
+                <div class="result-card">
+                  <div class="card-head-row">
+                    <h4>핵심 진단 3가지</h4>
+                    <span class="chip subtle">Issues</span>
+                  </div>
+                  <ul id="issueList" class="bullet-list"></ul>
+                </div>
+
+                <div class="result-card">
+                  <div class="card-head-row">
+                    <h4>추천 실행 방향</h4>
+                    <span class="chip subtle">Actions</span>
+                  </div>
+                  <ul id="actionList" class="bullet-list"></ul>
+                </div>
+              </div>
+
+              <div class="report-preview-card">
+                <div class="report-preview-top">
+                  <div>
+                    <div class="panel-kicker">REPORT PREVIEW</div>
+                    <h4>PDF 리포트 미리보기</h4>
+                  </div>
+                  <span class="chip primary">다운로드 가능</span>
+                </div>
+
+                <div class="report-sheet">
+                  <div class="sheet-header">
+                    <div>
+                      <div class="sheet-title">AI 마케팅 도우미 리포트</div>
+                      <div class="sheet-sub">업종 맞춤 진단 결과 요약</div>
+                    </div>
+                    <div class="sheet-score" id="sheetScore">72점</div>
+                  </div>
+
+                  <div class="sheet-grid">
+                    <div class="sheet-item">
+                      <div class="sheet-label">업체명</div>
+                      <div class="sheet-value" id="sheetCompany">OO업체</div>
+                    </div>
+                    <div class="sheet-item">
+                      <div class="sheet-label">업종</div>
+                      <div class="sheet-value" id="sheetCategory">로컬 서비스형</div>
+                    </div>
+                    <div class="sheet-item wide">
+                      <div class="sheet-label">포함 내용</div>
+                      <div class="sheet-value">
+                        핵심 진단, 점수 요약, 단기/중기/장기 실행 방향, 우선 검토 항목
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="result-actions">
+                  <button type="button" class="btn btn-dark" id="pdfBtn">PDF 내려받기</button>
+                  <button type="button" class="btn btn-ghost" id="deepBtn">심층분석 요청</button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <footer class="page-footer">
+        현재 버전은 프론트 시연용입니다. 실제 API, PDF 생성, 저장 기능은 다음 단계에서 연결됩니다.
+      </footer>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
 </body>
 </html>
