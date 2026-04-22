@@ -4,7 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI 마케팅 도우미</title>
-  <meta name="description" content="업체명, 이메일, 업종, URL을 입력하면 업종별 마케팅 진단 결과를 미리 확인할 수 있는 실행형 페이지" />
+  <meta
+    name="description"
+    content="업체명, 이메일, 업종, URL을 입력하면 초기 마케팅 진단 결과와 정밀 분석 준비 항목을 확인할 수 있는 실행형 페이지"
+  />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -15,13 +18,13 @@
           <div class="brand-mark">A</div>
           <div class="brand-copy">
             <div class="brand-name">AI 마케팅 도우미</div>
-            <div class="brand-sub">실행형 진단 페이지</div>
+            <div class="brand-sub">초기 진단 → 정밀 분석 확장형</div>
           </div>
         </div>
 
         <div class="topbar-right">
           <span class="soft-badge">Beta</span>
-          <span class="topbar-meta">로그인 없이 간편 진단</span>
+          <span class="topbar-meta">이메일 수집 포함 · 초기 진단 중심</span>
         </div>
       </div>
     </header>
@@ -29,19 +32,23 @@
     <main class="page">
       <section class="hero-minimal">
         <div class="hero-left">
-          <span class="eyebrow">업종 맞춤 진단</span>
-          <h1>내 업종에 맞는 마케팅 진단 리포트</h1>
+          <span class="eyebrow">업종 맞춤 초기 진단</span>
+          <h1>내 업종에 맞는 초기 마케팅 진단</h1>
           <p>
-            업체명, 이메일, 대표 URL 하나만 입력하고 바로 시작하세요.
-            서비스 소개보다 실행을 우선하는 화면으로 구성했습니다.
+            업체명, 이메일, 업종, 대표 URL을 입력하면 현재 단계에서 확인 가능한 범위의
+            <strong>초기 진단 결과</strong>를 먼저 보여드립니다.
+            정밀 분석은 채널/광고/웹 데이터 연결 후 확장됩니다.
           </p>
         </div>
 
         <div class="hero-right">
           <div class="hero-mini-card">
-            <div class="mini-label">현재 상태</div>
-            <div class="mini-value">분석 대기 중</div>
-            <div class="mini-desc">입력 후 바로 결과 프리뷰가 생성됩니다</div>
+            <div class="mini-label">현재 제공 범위</div>
+            <div class="mini-value">초기 진단</div>
+            <div class="mini-desc">
+              현재 결과는 입력 정보 기반의 1차 가설입니다.<br />
+              정밀 분석은 추가 데이터 연결 후 제공됩니다.
+            </div>
           </div>
         </div>
       </section>
@@ -130,12 +137,20 @@
                 </div>
               </div>
 
+              <div class="notice-box">
+                <div class="notice-title">현재 단계 안내</div>
+                <div class="notice-text">
+                  지금 결과는 입력 정보 기반의 <strong>초기 진단</strong>입니다.
+                  채널/광고/웹 데이터 연결 전에는 정밀 운영 분석이나 예산 시뮬레이션이 포함되지 않습니다.
+                </div>
+              </div>
+
               <div class="action-stack">
                 <button type="submit" id="analyzeBtn" class="btn btn-primary btn-lg">
-                  분석하기
+                  진단하기
                 </button>
                 <div class="form-help">
-                  현재 버전은 프론트 데모이며, 다음 단계에서 실제 API와 PDF 다운로드를 연결합니다.
+                  정밀 분석은 이후 단계에서 GA4, Search Console, YouTube, Instagram, 광고 계정 등을 연결해 확장합니다.
                 </div>
               </div>
             </form>
@@ -153,27 +168,27 @@
 
             <div id="idleState" class="state-card state-idle">
               <div class="state-icon">🧭</div>
-              <div class="state-title">입력 후 분석을 시작하세요</div>
+              <div class="state-title">입력 후 초기 진단을 시작하세요</div>
               <div class="state-text">
-                업체 정보와 업종 카테고리를 입력하면 오른쪽 패널에 결과 프리뷰가 생성됩니다.
+                현재 단계에서는 입력 정보 기준의 1차 가설과 정밀 분석에 필요한 연결 항목을 안내합니다.
               </div>
 
               <div class="idle-preview-grid">
                 <div class="preview-box">
-                  <div class="preview-label">마케팅 점수</div>
-                  <div class="preview-placeholder">--</div>
+                  <div class="preview-label">현재 진단 수준</div>
+                  <div class="preview-placeholder">초기 진단</div>
                 </div>
                 <div class="preview-box">
                   <div class="preview-label">핵심 진단</div>
                   <div class="preview-placeholder">3개 항목</div>
                 </div>
                 <div class="preview-box">
-                  <div class="preview-label">실행 방향</div>
-                  <div class="preview-placeholder">단기 / 중기 / 장기</div>
+                  <div class="preview-label">진단 가능 범위</div>
+                  <div class="preview-placeholder">현재 확인 가능한 영역</div>
                 </div>
                 <div class="preview-box">
-                  <div class="preview-label">리포트</div>
-                  <div class="preview-placeholder">PDF 프리뷰</div>
+                  <div class="preview-label">다음 단계</div>
+                  <div class="preview-placeholder">정밀 분석 연결</div>
                 </div>
               </div>
             </div>
@@ -181,7 +196,7 @@
             <div id="loadingState" class="state-card hidden">
               <div class="loading-top">
                 <div>
-                  <div class="state-title">분석 중입니다</div>
+                  <div class="state-title">초기 진단 생성 중입니다</div>
                   <div class="state-text" id="loadingText">입력값을 확인하고 있습니다...</div>
                 </div>
                 <div class="loader-ring"></div>
@@ -199,18 +214,26 @@
 
               <div class="loading-steps">
                 <div class="loading-step active" id="step1">입력 정보 확인</div>
-                <div class="loading-step" id="step2">업종 기준 분석</div>
-                <div class="loading-step" id="step3">결과 요약 생성</div>
-                <div class="loading-step" id="step4">리포트 구성</div>
+                <div class="loading-step" id="step2">업종 기준 점검</div>
+                <div class="loading-step" id="step3">초기 진단 생성</div>
+                <div class="loading-step" id="step4">정밀 분석 준비 항목 정리</div>
               </div>
             </div>
 
             <div id="resultState" class="hidden">
+              <div class="diagnosis-note">
+                <div class="diagnosis-note-title">현재 결과는 어디까지인가요</div>
+                <div class="diagnosis-note-text">
+                  이 결과는 <strong>입력 정보 기반의 초기 진단</strong>입니다.
+                  실제 채널 운영 수치, 저장률, 광고 효율, 예산 시뮬레이션은 데이터 연결 후 제공됩니다.
+                </div>
+              </div>
+
               <div class="result-top-grid">
                 <div class="score-widget">
                   <div class="score-ring" id="scoreRing">
                     <div class="score-ring-inner">
-                      <div class="score-caption">마케팅 점수</div>
+                      <div class="score-caption">현재 온라인 정비 수준</div>
                       <div class="score-value" id="scoreValue">72</div>
                     </div>
                   </div>
@@ -218,7 +241,7 @@
 
                 <div class="score-summary">
                   <div class="summary-top">
-                    <span class="soft-badge">예시 결과</span>
+                    <span class="soft-badge">현재 진단 수준</span>
                     <span class="summary-category" id="selectedCategoryText">로컬 서비스형</span>
                   </div>
                   <h3 id="summaryTitle">현재 온라인 존재감은 있으나 전환 구조 보강이 필요합니다</h3>
@@ -249,60 +272,64 @@
               <div class="result-grid">
                 <div class="result-card">
                   <div class="card-head-row">
-                    <h4>핵심 진단 3가지</h4>
-                    <span class="chip subtle">Issues</span>
+                    <h4>초기 진단 3가지</h4>
+                    <span class="chip subtle">Initial</span>
                   </div>
                   <ul id="issueList" class="bullet-list"></ul>
                 </div>
 
                 <div class="result-card">
                   <div class="card-head-row">
-                    <h4>추천 실행 방향</h4>
-                    <span class="chip subtle">Actions</span>
+                    <h4>우선 검토 방향</h4>
+                    <span class="chip subtle">Priority</span>
                   </div>
                   <ul id="actionList" class="bullet-list"></ul>
                 </div>
               </div>
 
-              <div class="report-preview-card">
-                <div class="report-preview-top">
+              <div class="scope-grid">
+                <div class="scope-card">
+                  <div class="card-head-row">
+                    <h4>현재 진단 가능한 범위</h4>
+                    <span class="chip subtle">Scope</span>
+                  </div>
+                  <ul class="bullet-list" id="scopeList"></ul>
+                </div>
+
+                <div class="scope-card">
+                  <div class="card-head-row">
+                    <h4>정밀 분석 시 제공 항목</h4>
+                    <span class="chip primary">Upgrade</span>
+                  </div>
+                  <ul class="bullet-list" id="upgradeList"></ul>
+                </div>
+              </div>
+
+              <div class="connections-card">
+                <div class="connections-top">
                   <div>
-                    <div class="panel-kicker">REPORT PREVIEW</div>
-                    <h4>PDF 리포트 미리보기</h4>
+                    <div class="panel-kicker">NEXT STEP</div>
+                    <h4>정밀 분석을 위해 필요한 연결</h4>
                   </div>
-                  <span class="chip primary">다운로드 가능</span>
+                  <span class="chip subtle">카테고리별 추천</span>
                 </div>
 
-                <div class="report-sheet">
-                  <div class="sheet-header">
-                    <div>
-                      <div class="sheet-title">AI 마케팅 도우미 리포트</div>
-                      <div class="sheet-sub">업종 맞춤 진단 결과 요약</div>
-                    </div>
-                    <div class="sheet-score" id="sheetScore">72점</div>
-                  </div>
-
-                  <div class="sheet-grid">
-                    <div class="sheet-item">
-                      <div class="sheet-label">업체명</div>
-                      <div class="sheet-value" id="sheetCompany">OO업체</div>
-                    </div>
-                    <div class="sheet-item">
-                      <div class="sheet-label">업종</div>
-                      <div class="sheet-value" id="sheetCategory">로컬 서비스형</div>
-                    </div>
-                    <div class="sheet-item wide">
-                      <div class="sheet-label">포함 내용</div>
-                      <div class="sheet-value">
-                        핵심 진단, 점수 요약, 단기/중기/장기 실행 방향, 우선 검토 항목
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <div class="connection-tags" id="connectionTags"></div>
 
                 <div class="result-actions">
-                  <button type="button" class="btn btn-dark" id="pdfBtn">PDF 내려받기</button>
-                  <button type="button" class="btn btn-ghost" id="deepBtn">심층분석 요청</button>
+                  <button type="button" class="btn btn-dark" id="connectChannelBtn">
+                    YouTube/Instagram 연결
+                  </button>
+                  <button type="button" class="btn btn-ghost" id="connectWebBtn">
+                    GA4/Search Console 연결
+                  </button>
+                  <button type="button" class="btn btn-ghost" id="deepBtn">
+                    심층 분석 요청
+                  </button>
+                </div>
+
+                <div class="connection-help">
+                  광고 예산 시뮬레이션은 기존 전환율, 객단가, 리드 전환율, 광고 채널 데이터 연결 후 제공됩니다.
                 </div>
               </div>
             </div>
@@ -311,7 +338,7 @@
       </section>
 
       <footer class="page-footer">
-        현재 버전은 프론트 시연용입니다. 실제 API, PDF 생성, 저장 기능은 다음 단계에서 연결됩니다.
+        현재 버전은 초기 진단 중심입니다. 실제 채널/광고/웹 데이터 연결 후 정밀 분석으로 확장됩니다.
       </footer>
     </main>
   </div>
