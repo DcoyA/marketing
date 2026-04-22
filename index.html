@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI 마케팅 도우미 — 우리 가게 마케팅 60초 진단</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.0/css/all.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <!-- ===== HEADER ===== -->
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="#" class="logo">
+        <span class="logo-icon"><i class="fa-solid fa-chart-line"></i></span>
+        <span class="logo-text">AI 마케팅 도우미</span>
+      </a>
+      <span class="header-badge">무료 · 로그인 불필요</span>
+    </div>
+  </header>
+
+  <!-- ===== HERO + 입력 폼 ===== -->
+  <main>
+    <section id="hero" class="hero-section">
+      <div class="container">
+        <div class="hero-copy">
+          <h1 class="hero-title">우리 가게 마케팅<br /><em>60초</em> AI 진단</h1>
+          <p class="hero-sub">업체명과 업종만 입력하면<br />마케팅 점수 · 핵심 문제 · 실행 전략 · PDF 리포트를 즉시 제공합니다.</p>
+        </div>
+
+        <!-- ===== STEP 1: 기본 정보 ===== -->
+        <div class="form-card" id="step-1">
+          <div class="step-label"><span>STEP 1</span> 기본 정보 입력</div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="biz-name">업체명 <span class="req">*</span></label>
+              <input type="text" id="biz-name" placeholder="예: 강남 스킨케어 클리닉" maxlength="50" />
+            </div>
+            <div class="form-group">
+              <label for="biz-email">이메일 <span class="req">*</span></label>
+              <input type="email" id="biz-email" placeholder="리포트 받을 이메일 주소" />
+            </div>
+          </div>
+
+          <!-- ===== STEP 2: 업종 선택 ===== -->
+          <div class="step-label mt-24"><span>STEP 2</span> 업종 카테고리 선택</div>
+          <p class="step-hint">해당하는 카테고리 하나를 선택하세요</p>
+
+          <div class="category-grid" id="category-grid">
+
+            <div class="cat-card" data-cat="local" tabindex="0">
+              <div class="cat-icon"><i class="fa-solid fa-map-location-dot"></i></div>
+              <div class="cat-body">
+                <strong>로컬 서비스형</strong>
+                <span class="cat-sub">네이버 지도 기반</span>
+                <ul class="cat-list">
+                  <li>식당 · 카페</li>
+                  <li>미용실 · 네일샵</li>
+                  <li>헬스장 · 필라테스</li>
+                  <li>학원 · 교습소</li>
+                </ul>
+              </div>
+              <div class="cat-check"><i class="fa-solid fa-circle-check"></i></div>
+            </div>
+
+            <div class="cat-card" data-cat="professional" tabindex="0">
+              <div class="cat-icon"><i class="fa-solid fa-user-tie"></i></div>
+              <div class="cat-body">
+                <strong>고관여 전문직형</strong>
+                <span class="cat-sub">신뢰 및 권위 기반</span>
+                <ul class="cat-list">
+                  <li>병원 · 치과 · 한의원</li>
+                  <li>법률 · 세무 · 회계</li>
+                  <li>부동산 분양 · 컨설팅</li>
+                  <li>성형 · 피부과</li>
+                </ul>
+              </div>
+              <div class="cat-check"><i class="fa-solid fa-circle-check"></i></div>
+            </div>
+
+            <div class="cat-card" data-cat="ecommerce" tabindex="0">
+              <div class="cat-icon"><i class="fa-solid fa-bag-shopping"></i></div>
+              <div class="cat-body">
+                <strong>이커머스형</strong>
+                <span class="cat-sub">비주얼 및 성과 광고 기반</span>
+                <ul class="cat-list">
+                  <li>의류 · 패션</li>
+                  <li>화장품 · 뷰티</li>
+                  <li>건강기능식품</li>
+                  <li>생활용품 쇼핑몰</li>
+                </ul>
+              </div>
+              <div class="cat-check"><i class="fa-solid fa-circle-check"></i></div>
+            </div>
+
+            <div class="cat-card" data-cat="b2b" tabindex="0">
+              <div class="cat-icon"><i class="fa-solid fa-building"></i></div>
+              <div class="cat-body">
+                <strong>B2B / IT 서비스형</strong>
+                <span class="cat-sub">논리 및 SEO 기반</span>
+                <ul class="cat-list">
+                  <li>SaaS · 솔루션</li>
+                  <li>제조 공장</li>
+                  <li>마케팅 대행사</li>
+                  <li>기업 대상 서비스</li>
+                </ul>
+              </div>
+              <div class="cat-check"><i class="fa-solid fa-circle-check"></i></div>
+            </div>
+
+            <div class="cat-card" data-cat="knowledge" tabindex="0">
+              <div class="cat-icon"><i class="fa-solid fa-lightbulb"></i></div>
+              <div class="cat-body">
+                <strong>무형 자산 / 지식 창업형</strong>
+                <span class="cat-sub">팬덤 기반</span>
+                <ul class="cat-list">
+                  <li>온라인 강의 · 코칭</li>
+                  <li>전자책 · 디지털 제품</li>
+                  <li>유튜버 · 크리에이터</li>
+                  <li>커뮤니티 비즈니스</li>
+                </ul>
+              </div>
+              <div class="cat-check"><i class="fa-solid fa-circle-check"></i></div>
+            </div>
+
+          </div><!-- /category-grid -->
+
+          <!-- 추가 정보 (선택) -->
+          <div class="optional-section" id="optional-section" style="display:none;">
+            <div class="step-label mt-24"><span>STEP 3</span> 추가 정보 <em class="opt-tag">선택 — 입력할수록 분석이 정확해집니다</em></div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="biz-url">웹사이트 / 인스타 / 스마트플레이스 URL</label>
+                <input type="url" id="biz-url" placeholder="https://" />
+              </div>
+              <div class="form-group">
+                <label for="biz-concern">현재 가장 큰 마케팅 고민</label>
+                <input type="text" id="biz-concern" placeholder="예: 인스타 팔로워는 있는데 문의가 없어요" maxlength="100" />
+              </div>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn-optional" id="btn-optional" type="button">
+              <i class="fa-solid fa-plus"></i> 추가 정보 입력 (선택)
+            </button>
+            <button class="btn-analyze" id="btn-analyze" type="button">
+              <i class="fa-solid fa-magnifying-glass-chart"></i> 분석 시작
+            </button>
+          </div>
+
+          <p class="form-notice"><i class="fa-solid fa-lock"></i> 로그인 불필요 · 1일 1회 무료 · 입력 정보는 분석에만 사용됩니다</p>
+        </div><!-- /form-card -->
+
+        <!-- ===== 분석 중 ===== -->
+        <div class="analyzing-card" id="step-analyzing" style="display:none;">
+          <div class="analyzing-inner">
+            <div class="spinner-ring"></div>
+            <h2 class="analyzing-title">AI가 분석 중입니다</h2>
+            <p class="analyzing-sub" id="analyzing-status">업종 데이터를 수집하는 중...</p>
+            <div class="progress-bar-wrap">
+              <div class="progress-bar" id="progress-bar"></div>
+            </div>
+            <div class="analyzing-steps" id="analyzing-steps">
+              <div class="astep" id="astep-1"><i class="fa-solid fa-circle-notch fa-spin"></i> 업종 기준 데이터 로드</div>
+              <div class="astep pending" id="astep-2"><i class="fa-regular fa-circle"></i> 채널 현황 진단</div>
+              <div class="astep pending" id="astep-3"><i class="fa-regular fa-circle"></i> 마케팅 점수 산출</div>
+              <div class="astep pending" id="astep-4"><i class="fa-regular fa-circle"></i> 전략 리포트 생성</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== 결과 화면 ===== -->
+        <div class="result-section" id="step-result" style="display:none;">
+
+          <!-- 결과 헤더 -->
+          <div class="result-header">
+            <div class="result-score-wrap">
+              <canvas id="scoreChart" width="160" height="160"></canvas>
+              <div class="score-center" id="score-center">
+                <span class="score-num" id="score-num">0</span>
+                <span class="score-label">/ 100</span>
+              </div>
+            </div>
+            <div class="result-meta">
+              <div class="result-badge" id="result-badge">진단 완료</div>
+              <h2 class="result-biz-name" id="result-biz-name">—</h2>
+              <p class="result-cat-label" id="result-cat-label">—</p>
+              <p class="result-date" id="result-date">—</p>
+            </div>
+          </div>
+
+          <!-- 점수 세부 -->
+          <div class="score-breakdown" id="score-breakdown">
+            <h3 class="section-title">항목별 점수</h3>
+            <div class="breakdown-grid" id="breakdown-grid"></div>
+          </div>
+
+          <!-- 핵심 문제 -->
+          <div class="problems-section">
+            <h3 class="section-title"><i class="fa-solid fa-triangle-exclamation"></i> 핵심 문제 3가지</h3>
+            <div class="problems-grid" id="problems-grid"></div>
+          </div>
+
+          <!-- 전략 -->
+          <div class="strategy-section">
+            <h3 class="section-title"><i class="fa-solid fa-road"></i> 마케팅 실행 전략</h3>
+            <div class="strategy-tabs">
+              <button class="stab active" data-tab="short">단기 (2주)</button>
+              <button class="stab" data-tab="mid">중기 (1~3개월)</button>
+              <button class="stab" data-tab="long">장기 (3~6개월)</button>
+            </div>
+            <div class="strategy-content" id="strategy-content"></div>
+          </div>
+
+          <!-- CTA 버튼 -->
+          <div class="result-cta">
+            <button class="btn-pdf" id="btn-pdf" type="button">
+              <i class="fa-solid fa-file-pdf"></i> PDF 리포트 내려받기
+            </button>
+            <button class="btn-deep" id="btn-deep" type="button">
+              <i class="fa-solid fa-brain"></i> 심층 분석 요청하기
+            </button>
+          </div>
+
+          <div class="result-reset">
+            <button class="btn-reset" id="btn-reset" type="button">
+              <i class="fa-solid fa-rotate-left"></i> 다른 업체 분석하기
+            </button>
+          </div>
+
+        </div><!-- /result-section -->
+
+        <!-- ===== 심층 분석 모달 ===== -->
+        <div class="modal-overlay" id="modal-deep" style="display:none;">
+          <div class="modal-box">
+            <button class="modal-close" id="modal-close"><i class="fa-solid fa-xmark"></i></button>
+            <div class="modal-icon"><i class="fa-solid fa-brain"></i></div>
+            <h3 class="modal-title">심층 분석 요청</h3>
+            <p class="modal-desc">전문가가 직접 검토하고 맞춤 전략을 제안드립니다.<br />48시간 이내 이메일로 결과를 보내드립니다.</p>
+            <div class="modal-form">
+              <input type="tel" id="modal-phone" placeholder="연락처 (선택)" maxlength="15" />
+              <textarea id="modal-message" rows="3" placeholder="추가로 알려주실 내용 (선택)"></textarea>
+              <button class="btn-modal-submit" id="btn-modal-submit" type="button">심층 분석 신청</button>
+            </div>
+            <div class="modal-success" id="modal-success" style="display:none;">
+              <i class="fa-solid fa-circle-check"></i>
+              <p>신청이 완료되었습니다!<br />이메일로 결과를 보내드리겠습니다.</p>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /container -->
+    </section>
+  </main>
+
+  <!-- ===== FOOTER ===== -->
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <span class="footer-brand">AI 마케팅 도우미</span>
+      <span class="footer-copy">© 2026 · 로그인 불필요 · 1일 1회 무료 진단</span>
+    </div>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
