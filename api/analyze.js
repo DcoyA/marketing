@@ -329,6 +329,184 @@ async function fetchPageSpeed(url, apiKey) {
     seoScore: to100(cats.seo?.score),
   };
 }
+function compactEvidenceForLLM(evidence = []) {
+  return (Array.isArray(evidence) ? evidence : []).slice(0, 14).map((x) => ({
+    type: x?.type || null,
+    title: stripHtml(x?.title || ""),
+    url: normUrl(x?.url || ""),
+    source: x?.source || null,
+    mallName: x?.mallName || null,
+    subscriberCount: Number.isFinite(Number(x?.subscriberCount)) ? Number(x.subscriberCount) : null,
+  }));
+}
+
+async function generateStrategicDiagnosisLLM({
+  companyName,
+  industry,
+  region,
+  discovery,
+  score,
+  evidence,
+}) {
+  const apiKey = env("OPENAI_API_KEY");
+  if (!apiKey) return null;
+
+  const model = env("OPENAI_MODEL") || "gpt-4.1-mini";
+
+  const inputPayload = {
+    company: { companyName, industry, region },
+    score,
+    assets: discovery?.assets || {},
+    verified: discovery?.verified || {},
+    pageSpeed: discovery?.pageSpeed || {},
+    sourceStatus: discovery?.sourceStatus || {},
+    rawCount: discovery?.rawCount || {},
+    evidence: compactEvidenceForLLM(evidence),
+  };
+
+  const schema = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      executiveSummary: { type: "string" },
+      wins: {
+        type: "array",
+        items: { type: "string" },
+        maxItems: 6
+      },
+      risks: {
+        type: "array",
+        items: { type: "string" },
+        maxItems: 6
+      },
+      nextActions: {
+        type: "array",
+        items: { type: "string" },
+        maxItems: 6
+      },
+      limits: {
+        type: "array",
+        items: { type: "string" },
+        maxItems: 4
+      },
+      priorities: {
+        type: "array",
+        maxItems: 4,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            rank: { type: "integer" },
+            title: { type: "string" },
+            whyNow: { type: "string" },
+            channels: {
+              type: "array",
+              items: { type: "string" },
+              maxItems: 6
+            },
+            actions: {
+              type: "array",
+              items: { type: "string" },
+              maxItems: 6
+            },
+            budgetKRW: { type: "string" },
+            expectedOutcome: { type: "string" },
+            expectedROI: { type: "string" },
+            kpis: {
+              type: "array",
+              items: { type: "string" },
+              maxItems: 8
+            }
+          },
+          required: [
+            "rank",
+            "title",
+            "whyNow",
+            "channels",
+            "actions",
+            "budgetKRW",
+            "expectedOutcome",
+            "expectedROI",
+            "kpis"
+          ]
+        }
+      }
+    },
+    required: [
+      "executiveSummary",
+      "wins",
+      "risks",
+      "nextActions",
+      "limits",
+      "priorities"
+    ]
+  };
+
+  const systemPrompt = [
+    "You are a senior Korean digital marketing strategist for ecommerce brands.",
+    "Use ONLY the provided collected facts.",
+    "Do NOT invent official assets that were not verified.",
+    "If PageSpeed failed, treat site performance as unknown, not automatically bad.",
+    "If NAVER Store is missing, explain lower-funnel weakness and NAVER defense need.",
+    "Give practical channel-specific strategy for Korea.",
+    "Budget must be monthly KRW ranges, conservative and realistic.",
+    "ROI/ROAS must be ranges with assumptions, not guarantees.",
+    "Make output insightful, not generic."
+  ].join(" ");
+
+  const userPrompt = `
+아래 수집 결과를 바탕으로 마케팅 전략을 재분석하세요.
+
+반드시 지켜야 할 규칙:
+1. verified=true 인 자산만 '확인된 공식 자산'으로 취급
+2. verified=false 인 자산은 "후보" 또는 "미확인"으로 표현
+3. 점수(score)는 사실로 받아들이되, 의미를 해석해서 우선순위를 정할 것
+4. 예산은 월 기준 KRW 범위로 제시
+5. expectedROI 는 "직접 ROAS", "blended ROI", "CPA 개선" 같은 보수적 표현으로 제시
+6. nextActions 는 운영자가 바로 실행 가능한 문장으로 작성
+7. priorities 는 rank 1~4로 작성
+8. 너무 짧게 쓰지 말고, 근거 기반으로 구체적으로 작성
+
+입력 데이터:
+${JSON.stringify(inputPayload, null, 2)}
+`;
+
+  try {
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "marketing_reanalysis",
+            strict: true,
+            schema
+          }
+        },
+        temperature: 0.4
+      })
+    });
+
+    const json = await r.json();
+    const content = json?.choices?.[0]?.message?.content;
+    if (!r.ok || !content) {
+      return null;
+    }
+
+    return JSON.parse(content);
+  } catch (e) {
+    return null;
+  }
+}
 
 function buildEvidence(blogItems, shopItems, webHome, webIg, ytCh) {
   const a = [];
