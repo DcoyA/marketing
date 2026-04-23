@@ -75,6 +75,80 @@ function parseJsonText(text) {
     }
   }
 }
+function getClientIp(req) {
+  const xff = s(req?.headers?.["x-forwarded-for"]);
+  if (xff) return xff.split(",")[0].trim();
+  return s(req?.headers?.["x-real-ip"]) || s(req?.socket?.remoteAddress) || "";
+}
+
+function todaySeoul() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+
+  const y = parts.find((p) => p.type === "year")?.value || "0000";
+  const m = parts.find((p) => p.type === "month")?.value || "00";
+  const d = parts.find((p) => p.type === "day")?.value || "00";
+  return `${y}-${m}-${d}`;
+}
+
+async function sha256HexValue(text) {
+  const { createHash } = await import("node:crypto");
+  return createHash("sha256").update(s(text)).digest("hex");
+}
+
+async function postAppScriptJson(action, payload = {}) {
+  if (!APP_SCRIPT_URL) {
+    return { ok: false, error: "missing GOOGLE_APPS_SCRIPT_URL" };
+  }
+
+  try {
+    const r = await fetch(APP_SCRIPT_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        action,
+        ...payload,
+      }),
+    });
+
+    const text = await r.text();
+    const json = parseJsonText(text);
+
+    if (!json || typeof json !== "object") {
+      return {
+        ok: false,
+        error: "app script response is not valid JSON",
+        raw: text,
+      };
+    }
+
+    return json;
+  } catch (e) {
+    return {
+      ok: false,
+      error: e?.message || "app script fetch failed",
+    };
+  }
+}
+
+async function checkDailyIpLimit(ipHash, requestDate) {
+  return postAppScriptJson("check_limit", {
+    ip_hash: ipHash,
+    request_date: requestDate,
+  });
+}
+
+async function saveDiagnosisToSheet(data) {
+  return postAppScriptJson("save_diagnosis", {
+    data,
+  });
+}
 
 function makeStatus() {
   return {
@@ -545,6 +619,33 @@ export default async function handler(req, res) {
 
     if (!companyName) {
       return res.status(400).json({ ok: false, error: "companyName is required" });
+    }
+        const clientIp = getClientIp(req);
+    const requestDate = todaySeoul();
+
+    // IP가 비어도 완전히 실패하지 않게 fallback 포함
+    const ipHash = await sha256HexValue(
+      clientIp || `${companyName}|${email || "no-email"}|unknown-ip`
+    );
+
+    const limitCheck = await checkDailyIpLimit(ipHash, requestDate);
+
+    if (!limitCheck?.ok) {
+      return res.status(503).json({
+        ok: false,
+        error: "저장소 연결 오류로 진단을 진행할 수 없습니다.",
+        code: "STORAGE_UNAVAILABLE",
+      });
+    }
+
+    if (limitCheck.allowed === false) {
+      return res.status(429).json({
+        ok: false,
+        error: "동일한 IP에서는 하루에 2번까지만 이용할 수 있습니다. 내일 다시 시도해주세요.",
+        code: "RATE_LIMIT_DAILY_IP",
+        dailyCount: limitCheck.dailyCount,
+        limit: limitCheck.limit,
+      });
     }
 
     const naverCreds = {
