@@ -1,464 +1,682 @@
-const GOOGLE_CSE_ENDPOINT = "https://www.googleapis.com/customsearch/v1";
+const ENV = {
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY || "",
+  GEMINI_MODEL: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+  YOUTUBE_API_KEY: process.env.YOUTUBE_API_KEY || "",
+  NAVER_CLIENT_ID: process.env.NAVER_CLIENT_ID || "",
+  NAVER_CLIENT_SECRET: process.env.NAVER_CLIENT_SECRET || "",
+  PAGESPEED_API_KEY: process.env.PAGESPEED_API_KEY || ""
+};
 
-function stripHtml(input = "") {
-  return String(input)
-    .replace(/<[^>]*>/g, "")
+const JSON_HEADERS = {
+  "Content-Type": "application/json; charset=utf-8"
+};
+
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type"
+};
+
+const MARKETPLACE_HOST_HINTS = [
+  "shopping.naver.com",
+  "search.shopping.naver.com",
+  "smartstore.naver.com",
+  "adcr.naver.com",
+  "cr.shopping.naver.com",
+  "link.coupang.com",
+  "coupang.com",
+  "11st.co.kr",
+  "gmarket.co.kr",
+  "auction.co.kr",
+  "wemakeprice.com",
+  "tmon.co.kr",
+  "lotteon.com",
+  "store.kakao.com"
+];
+
+function setCommonHeaders(res) {
+  Object.entries({ ...JSON_HEADERS, ...CORS_HEADERS }).forEach(([k, v]) => {
+    res.setHeader(k, v);
+  });
+}
+
+function clamp(n, min, max) {
+  return Math.max(min, Math.min(max, n));
+}
+
+function round(n, digits = 0) {
+  const p = 10 ** digits;
+  return Math.round((Number(n) || 0) * p) / p;
+}
+
+function unique(arr) {
+  return [...new Set((arr || []).filter(Boolean))];
+}
+
+function tryParseJson(text, fallback = null) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return fallback;
+  }
+}
+
+function decodeHtml(str = "") {
+  return String(str)
+    .replace(/<[^>]*>/g, " ")
     .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, "&")
     .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
-function normalizeText(input = "") {
-  return String(input)
+function stripTags(str = "") {
+  return decodeHtml(str);
+}
+
+function normalizeText(str = "") {
+  return String(str)
     .toLowerCase()
-    .replace(/\s+/g, "")
-    .replace(/[^\p{L}\p{N}]/gu, "");
+    .replace(/㈜|\(주\)|주식회사|corp\.?|corporation|co\.?,?\s?ltd\.?|inc\.?|limited/g, "")
+    .replace(/[^a-z0-9가-힣]/g, "")
+    .trim();
 }
 
-function tokenize(input = "") {
-  return String(input)
-    .toLowerCase()
-    .split(/[\s/|,._\-()]+/)
-    .map((v) => v.trim())
-    .filter(Boolean);
+function tokenIncludes(base = "", target = "") {
+  const a = normalizeText(base);
+  const b = normalizeText(target);
+  if (!a || !b) return false;
+  return a.includes(b) || b.includes(a);
 }
 
-function clamp(num, min, max) {
-  return Math.max(min, Math.min(max, num));
-}
-
-function getHostname(url = "") {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch (_) {
-    return "";
-  }
-}
-
-function uniqueBy(items = [], keyFn) {
-  const seen = new Set();
-  const result = [];
-
-  for (const item of items) {
-    const key = keyFn(item);
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    result.push(item);
-  }
-
-  return result;
-}
-
-function scoreNameMatch(text = "", companyName = "", region = "") {
-  const raw = `${text}`.toLowerCase();
-  const rawCompany = String(companyName || "").toLowerCase().trim();
-  const rawRegion = String(region || "").toLowerCase().trim();
-
-  const normText = normalizeText(text);
-  const normCompany = normalizeText(companyName);
-  const companyTokens = tokenize(companyName);
-  const regionTokens = tokenize(region);
+function scoreNameMatch(companyName, ...texts) {
+  const target = normalizeText(companyName);
+  if (!target) return 0;
 
   let score = 0;
+  const joined = texts.map((t) => normalizeText(t)).join(" ");
 
-  if (!text) return 0;
+  if (joined.includes(target)) score += 50;
 
-  if (normCompany && normText.includes(normCompany)) score += 60;
-  if (rawCompany && raw.includes(rawCompany)) score += 15;
-
-  let companyTokenHits = 0;
-  for (const token of companyTokens) {
-    if (token && raw.includes(token)) companyTokenHits += 1;
-  }
-  if (companyTokens.length > 0) {
-    score += Math.min(15, Math.round((companyTokenHits / companyTokens.length) * 15));
-  }
-
-  let regionHits = 0;
-  for (const token of regionTokens) {
-    if (token && raw.includes(token)) regionHits += 1;
-  }
-  if (regionTokens.length > 0) {
-    score += Math.min(10, Math.round((regionHits / regionTokens.length) * 10));
-  } else if (rawRegion && raw.includes(rawRegion)) {
-    score += 8;
+  for (const text of texts) {
+    const n = normalizeText(text);
+    if (!n) continue;
+    if (n === target) score += 35;
+    else if (n.includes(target) || target.includes(n)) score += 20;
   }
 
   return clamp(score, 0, 100);
 }
 
-function looksLikeInstagramProfile(url = "") {
+function getHostname(url = "") {
   try {
-    const u = new URL(url);
-    const host = u.hostname.replace(/^www\./, "");
-    if (!host.endsWith("instagram.com")) return false;
-
-    const path = u.pathname.replace(/^\/+|\/+$/g, "");
-    if (!path) return false;
-
-    const first = path.split("/")[0].toLowerCase();
-    const blocked = ["p", "reel", "reels", "explore", "stories", "tv", "accounts"];
-    return !blocked.includes(first);
-  } catch (_) {
-    return false;
+    return new URL(url).hostname.toLowerCase();
+  } catch {
+    return "";
   }
 }
 
-function looksLikeYouTubeChannel(url = "") {
+function getOrigin(url = "") {
   try {
     const u = new URL(url);
-    const host = u.hostname.replace(/^www\./, "");
-    if (!host.endsWith("youtube.com")) return false;
-
-    const path = u.pathname.toLowerCase();
-    return (
-      path.startsWith("/@") ||
-      path.startsWith("/channel/") ||
-      path.startsWith("/c/") ||
-      path.startsWith("/user/")
-    );
-  } catch (_) {
-    return false;
+    return `${u.protocol}//${u.hostname}`;
+  } catch {
+    return null;
   }
 }
 
-function isRejectedHomepage(url = "") {
-  const host = getHostname(url);
-  const blocked = [
-    "instagram.com",
-    "youtube.com",
-    "youtu.be",
-    "facebook.com",
-    "x.com",
-    "twitter.com",
-    "tiktok.com",
-    "blog.naver.com",
-    "cafe.naver.com",
-    "map.naver.com",
-    "m.place.naver.com",
-    "smartstore.naver.com",
-    "search.shopping.naver.com",
-    "play.google.com",
-    "apps.apple.com",
-    "namu.wiki"
-  ];
-  return blocked.some((d) => host === d || host.endsWith(`.${d}`));
+function looksLikeMarketplace(hostname = "") {
+  const host = hostname.toLowerCase();
+  return MARKETPLACE_HOST_HINTS.some((hint) => host === hint || host.endsWith(`.${hint}`));
 }
 
-function mapGoogleItem(item = {}) {
+function isEmail(email = "") {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim());
+}
+
+async function readBody(req) {
+  if (req.body && typeof req.body === "object") return req.body;
+  if (typeof req.body === "string") return tryParseJson(req.body, {});
+  return await new Promise((resolve) => {
+    let data = "";
+    req.on("data", (chunk) => {
+      data += chunk;
+    });
+    req.on("end", () => {
+      resolve(tryParseJson(data, {}));
+    });
+    req.on("error", () => resolve({}));
+  });
+}
+
+async function fetchJson(url, options = {}, timeoutMs = 12000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+
+    const text = await res.text();
+    const data = tryParseJson(text, null);
+
+    return {
+      ok: res.ok,
+      status: res.status,
+      data,
+      text
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function pickIndustryLabel(industry = "") {
+  const s = String(industry || "").trim();
+  const n = normalizeText(s);
+
+  if (!s) return "일반";
+  if (n.includes("이커머스") || n.includes("쇼핑몰") || n.includes("커머스")) return "이커머스 / 쇼핑몰";
+  if (n.includes("병원") || n.includes("의원") || n.includes("치과")) return "병원 / 의료";
+  if (n.includes("식당") || n.includes("카페") || n.includes("음식") || n.includes("외식")) return "외식 / 매장";
+  if (n.includes("학원") || n.includes("교육")) return "교육 / 학원";
+  if (n.includes("부동산")) return "부동산";
+  if (n.includes("뷰티") || n.includes("미용")) return "뷰티";
+  return s;
+}
+
+function buildQueries(input) {
+  const company = String(input.companyName || "").trim();
+  const industry = String(input.industry || "").trim();
+  const region = String(input.region || "").trim();
+
   return {
-    title: stripHtml(item.title || ""),
-    snippet: stripHtml(item.snippet || ""),
-    url: item.link || "",
-    displayLink: item.displayLink || "",
-    source: "google"
+    blog: unique([
+      company,
+      `${company} 공식`,
+      region ? `${company} ${region}` : "",
+      industry ? `${company} ${industry}` : ""
+    ]).slice(0, 3),
+    shopping: unique([
+      company,
+      industry ? `${company} ${industry}` : "",
+      `${company} 공식`
+    ]).slice(0, 3),
+    youtube: unique([
+      company,
+      `${company} official`
+    ]).slice(0, 2)
   };
 }
 
-async function fetchJson(url) {
-  const response = await fetch(url);
-  const text = await response.text();
-
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${text.slice(0, 300)}`);
+async function naverSearch(endpoint, query, extra = {}) {
+  if (!ENV.NAVER_CLIENT_ID || !ENV.NAVER_CLIENT_SECRET || !query) {
+    return { ok: false, total: 0, items: [], error: "NAVER credentials missing or empty query" };
   }
 
-  try {
-    return JSON.parse(text);
-  } catch (_) {
-    throw new Error(`JSON parse failed: ${text.slice(0, 300)}`);
-  }
-}
+  const params = new URLSearchParams({
+    query,
+    display: String(extra.display || 5),
+    start: String(extra.start || 1),
+    sort: extra.sort || "sim"
+  });
 
-async function googleSearch(query, num = 5) {
-  const apiKey = process.env.GOOGLE_SEARCH_API_KEY;
-  const cx = process.env.GOOGLE_SEARCH_ENGINE_ID;
+  const url = `https://openapi.naver.com/v1/search/${endpoint}.json?${params.toString()}`;
 
-  if (!apiKey || !cx) {
-    throw new Error("GOOGLE_SEARCH_API_KEY 또는 GOOGLE_SEARCH_ENGINE_ID 누락");
-  }
-
-  const url =
-    `${GOOGLE_CSE_ENDPOINT}?key=${encodeURIComponent(apiKey)}` +
-    `&cx=${encodeURIComponent(cx)}` +
-    `&q=${encodeURIComponent(query)}` +
-    `&num=${num}`;
-
-  const data = await fetchJson(url);
-  return (data.items || []).map(mapGoogleItem);
-}
-
-function pickBestHomepage(items = [], companyName = "", region = "") {
-  const candidates = items
-    .filter((item) => item.url && !isRejectedHomepage(item.url))
-    .map((item) => {
-      let score = scoreNameMatch(`${item.title} ${item.snippet} ${item.url}`, companyName, region);
-      if (!isRejectedHomepage(item.url)) score += 10;
-      if (/공식|official|홈페이지|회사|기업|서비스/i.test(`${item.title} ${item.snippet}`)) score += 8;
-      return { ...item, matchScore: clamp(score, 0, 100) };
-    })
-    .sort((a, b) => b.matchScore - a.matchScore);
-
-  if (!candidates.length || candidates[0].matchScore < 35) return null;
-  return candidates[0];
-}
-
-function pickBestInstagram(items = [], companyName = "", region = "") {
-  const candidates = items
-    .filter((item) => looksLikeInstagramProfile(item.url))
-    .map((item) => {
-      let score = scoreNameMatch(`${item.title} ${item.snippet} ${item.url}`, companyName, region);
-      score += 15;
-      return { ...item, matchScore: clamp(score, 0, 100) };
-    })
-    .sort((a, b) => b.matchScore - a.matchScore);
-
-  if (!candidates.length || candidates[0].matchScore < 30) return null;
-  return candidates[0];
-}
-
-function pickBestYouTube(items = [], companyName = "", region = "") {
-  const candidates = items
-    .filter((item) => looksLikeYouTubeChannel(item.url))
-    .map((item) => {
-      let score = scoreNameMatch(`${item.title} ${item.snippet} ${item.url}`, companyName, region);
-      score += 15;
-      return { ...item, matchScore: clamp(score, 0, 100) };
-    })
-    .sort((a, b) => b.matchScore - a.matchScore);
-
-  if (!candidates.length || candidates[0].matchScore < 30) return null;
-  return candidates[0];
-}
-
-function pickBestNaverStore(items = [], companyName = "", region = "") {
-  const candidates = items
-    .filter((item) => {
-      const host = getHostname(item.url);
-      return host.includes("smartstore.naver.com") || host.includes("search.shopping.naver.com");
-    })
-    .map((item) => {
-      let score = scoreNameMatch(`${item.title} ${item.snippet} ${item.url}`, companyName, region);
-      score += 20;
-      return { ...item, matchScore: clamp(score, 0, 100) };
-    })
-    .sort((a, b) => b.matchScore - a.matchScore);
-
-  if (!candidates.length || candidates[0].matchScore < 25) return null;
-  return candidates[0];
-}
-
-function pickBestMap(items = [], companyName = "", region = "") {
-  const candidates = items
-    .filter((item) => {
-      const host = getHostname(item.url);
-      return (
-        host.includes("map.naver.com") ||
-        host.includes("m.place.naver.com") ||
-        host.includes("google.com") ||
-        host.includes("g.page")
-      );
-    })
-    .map((item) => {
-      let score = scoreNameMatch(`${item.title} ${item.snippet} ${item.url}`, companyName, region);
-      score += 18;
-      return { ...item, matchScore: clamp(score, 0, 100) };
-    })
-    .sort((a, b) => b.matchScore - a.matchScore);
-
-  if (!candidates.length || candidates[0].matchScore < 25) return null;
-  return candidates[0];
-}
-
-async function discoverGoogleAssets({ companyName, region }) {
-  const jobs = [
-    { key: "general", query: `${companyName} ${region}` },
-    { key: "homepage", query: `${companyName} ${region} 공식 홈페이지` },
-    { key: "instagram", query: `${companyName} ${region} site:instagram.com` },
-    { key: "youtube", query: `${companyName} ${region} site:youtube.com` },
-    { key: "naverStore", query: `${companyName} ${region} site:smartstore.naver.com` },
-    { key: "map", query: `${companyName} ${region} 지도` }
-  ];
-
-  const settled = await Promise.allSettled(
-    jobs.map((job) => googleSearch(job.query, 5))
-  );
-
-  const raw = {};
-  const warnings = [];
-
-  settled.forEach((result, index) => {
-    const key = jobs[index].key;
-
-    if (result.status === "fulfilled") {
-      raw[key] = result.value || [];
-    } else {
-      raw[key] = [];
-      warnings.push(`${key} 검색 실패`);
+  const result = await fetchJson(url, {
+    headers: {
+      "X-Naver-Client-Id": ENV.NAVER_CLIENT_ID,
+      "X-Naver-Client-Secret": ENV.NAVER_CLIENT_SECRET
     }
   });
 
-  const allGeneral = raw.general || [];
-  const homepage = pickBestHomepage(
-    uniqueBy([...(raw.homepage || []), ...allGeneral], (v) => v.url),
-    companyName,
-    region
+  if (!result.ok) {
+    return {
+      ok: false,
+      total: 0,
+      items: [],
+      status: result.status,
+      error: result.text || "NAVER API failed"
+    };
+  }
+
+  return {
+    ok: true,
+    total: Number(result.data?.total || 0),
+    items: Array.isArray(result.data?.items) ? result.data.items : []
+  };
+}
+
+function dedupeByUrl(items = []) {
+  const map = new Map();
+  for (const item of items) {
+    const key = item.url || item.link || item.channelId || JSON.stringify(item);
+    if (!map.has(key)) map.set(key, item);
+  }
+  return [...map.values()];
+}
+
+async function searchNaverBlog(input) {
+  const queries = buildQueries(input).blog;
+  const jobs = queries.map((q) => naverSearch("blog", q, { display: 5, sort: "sim" }));
+  const settled = await Promise.allSettled(jobs);
+
+  const items = [];
+  let total = 0;
+  let ok = false;
+  let errors = [];
+
+  settled.forEach((r, idx) => {
+    if (r.status === "fulfilled") {
+      const value = r.value;
+      if (value.ok) ok = true;
+      total += Number(value.total || 0);
+      (value.items || []).forEach((item) => {
+        items.push({
+          source: "naver-blog",
+          query: queries[idx],
+          title: stripTags(item.title),
+          url: item.link || null,
+          snippet: stripTags(item.description),
+          blogName: stripTags(item.bloggername),
+          postDate: item.postdate || null
+        });
+      });
+      if (!value.ok && value.error) errors.push(value.error);
+    } else {
+      errors.push(r.reason?.message || "NAVER blog search failed");
+    }
+  });
+
+  const deduped = dedupeByUrl(items).slice(0, 12);
+  return { ok, total, items: deduped, errors };
+}
+
+async function searchNaverShopping(input) {
+  const queries = buildQueries(input).shopping;
+  const jobs = queries.map((q) => naverSearch("shopping", q, { display: 8, sort: "sim" }));
+  const settled = await Promise.allSettled(jobs);
+
+  const items = [];
+  let total = 0;
+  let ok = false;
+  let errors = [];
+
+  settled.forEach((r, idx) => {
+    if (r.status === "fulfilled") {
+      const value = r.value;
+      if (value.ok) ok = true;
+      total += Number(value.total || 0);
+      (value.items || []).forEach((item) => {
+        items.push({
+          source: "naver-shopping",
+          query: queries[idx],
+          title: stripTags(item.title),
+          url: item.link || null,
+          image: item.image || null,
+          lprice: Number(item.lprice || 0),
+          hprice: Number(item.hprice || 0),
+          mallName: stripTags(item.mallName),
+          brand: stripTags(item.brand),
+          maker: stripTags(item.maker),
+          category1: item.category1 || null,
+          category2: item.category2 || null,
+          category3: item.category3 || null,
+          category4: item.category4 || null
+        });
+      });
+      if (!value.ok && value.error) errors.push(value.error);
+    } else {
+      errors.push(r.reason?.message || "NAVER shopping search failed");
+    }
+  });
+
+  const deduped = dedupeByUrl(items).slice(0, 16);
+  return { ok, total, items: deduped, errors };
+}
+
+async function searchYouTube(input) {
+  if (!ENV.YOUTUBE_API_KEY) {
+    return { ok: false, items: [], best: null, error: "YOUTUBE_API_KEY missing" };
+  }
+
+  const query = buildQueries(input).youtube[0] || input.companyName;
+  const searchUrl =
+    `https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&maxResults=5` +
+    `&q=${encodeURIComponent(query)}&key=${encodeURIComponent(ENV.YOUTUBE_API_KEY)}`;
+
+  const searchRes = await fetchJson(searchUrl);
+
+  if (!searchRes.ok) {
+    return {
+      ok: false,
+      items: [],
+      best: null,
+      status: searchRes.status,
+      error: searchRes.text || "YouTube search failed"
+    };
+  }
+
+  const searchItems = Array.isArray(searchRes.data?.items) ? searchRes.data.items : [];
+  const channelIds = unique(
+    searchItems.map((item) => item?.snippet?.channelId || item?.id?.channelId).filter(Boolean)
   );
 
-  const instagram = pickBestInstagram(
-    uniqueBy([...(raw.instagram || []), ...allGeneral], (v) => v.url),
-    companyName,
-    region
-  );
+  if (!channelIds.length) {
+    return { ok: true, items: [], best: null };
+  }
 
-  const youtube = pickBestYouTube(
-    uniqueBy([...(raw.youtube || []), ...allGeneral], (v) => v.url),
-    companyName,
-    region
-  );
+  const channelUrl =
+    `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${encodeURIComponent(channelIds.join(","))}` +
+    `&key=${encodeURIComponent(ENV.YOUTUBE_API_KEY)}`;
 
-  const naverStore = pickBestNaverStore(
-    uniqueBy([...(raw.naverStore || []), ...allGeneral], (v) => v.url),
-    companyName,
-    region
-  );
+  const channelRes = await fetchJson(channelUrl);
 
-  const map = pickBestMap(
-    uniqueBy([...(raw.map || []), ...allGeneral], (v) => v.url),
-    companyName,
-    region
-  );
+  if (!channelRes.ok) {
+    return {
+      ok: false,
+      items: [],
+      best: null,
+      status: channelRes.status,
+      error: channelRes.text || "YouTube channels failed"
+    };
+  }
 
+  const channels = Array.isArray(channelRes.data?.items) ? channelRes.data.items : [];
+
+  const enriched = channels.map((ch) => {
+    const title = ch?.snippet?.title || "";
+    const description = ch?.snippet?.description || "";
+    const channelId = ch?.id || "";
+    const subscribers = Number(ch?.statistics?.subscriberCount || 0);
+    const videoCount = Number(ch?.statistics?.videoCount || 0);
+    const viewCount = Number(ch?.statistics?.viewCount || 0);
+
+    let score = 0;
+    score += scoreNameMatch(input.companyName, title, description);
+    if (tokenIncludes(input.companyName, title)) score += 20;
+    if (/official|공식|오피셜|브랜드/i.test(`${title} ${description}`)) score += 10;
+    score += clamp(Math.log10(subscribers + 1) * 6, 0, 18);
+    score += clamp(Math.log10(videoCount + 1) * 4, 0, 12);
+
+    return {
+      source: "youtube",
+      title,
+      url: `https://www.youtube.com/channel/${channelId}`,
+      channelId,
+      snippet: description,
+      subscribers,
+      videoCount,
+      viewCount,
+      score: round(score),
+      confidence:
+        score >= 80 ? "high" :
+        score >= 55 ? "medium" : "low"
+    };
+  });
+
+  const sorted = enriched.sort((a, b) => b.score - a.score);
+  return {
+    ok: true,
+    items: sorted,
+    best: sorted[0] || null
+  };
+}
+
+function pickNaverStore(input, shoppingItems = []) {
+  const scored = shoppingItems
+    .map((item) => {
+      const url = item.url || "";
+      const hostname = getHostname(url);
+      let score = 0;
+
+      if (hostname.includes("smartstore.naver.com")) score += 55;
+      score += scoreNameMatch(input.companyName, item.title, item.mallName, item.brand, item.maker);
+      if (tokenIncludes(input.companyName, item.mallName)) score += 20;
+      if (tokenIncludes(input.companyName, item.brand)) score += 15;
+
+      return {
+        ...item,
+        score
+      };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  const best = scored[0];
+  if (!best || best.score < 40) return null;
+
+  return {
+    title: best.mallName || best.title,
+    url: best.url,
+    source: "naver-shopping",
+    confidence: best.score >= 75 ? "high" : "medium",
+    snippet: [best.brand, best.maker, best.category1, best.category2].filter(Boolean).join(" / ")
+  };
+}
+
+function inferHomepage(input, shoppingItems = []) {
+  const candidates = [];
+
+  for (const item of shoppingItems) {
+    const url = item.url || "";
+    const host = getHostname(url);
+    const origin = getOrigin(url);
+
+    if (!origin || !host) continue;
+    if (looksLikeMarketplace(host)) continue;
+
+    let score = 0;
+    score += scoreNameMatch(input.companyName, item.title, item.mallName, item.brand, item.maker);
+    if (tokenIncludes(input.companyName, item.mallName)) score += 20;
+    if (tokenIncludes(input.companyName, item.brand)) score += 12;
+
+    candidates.push({
+      title: item.mallName || item.title,
+      url: origin,
+      source: "derived-from-shopping",
+      confidence: "low",
+      snippet: `NAVER Shopping 링크 기반 추정 (${host})`,
+      score
+    });
+  }
+
+  const merged = new Map();
+  for (const c of candidates) {
+    const prev = merged.get(c.url);
+    if (!prev || prev.score < c.score) merged.set(c.url, c);
+  }
+
+  const best = [...merged.values()].sort((a, b) => b.score - a.score)[0];
+  if (!best || best.score < 35) return null;
+
+  if (best.score >= 70) best.confidence = "medium";
+  return best;
+}
+
+function countRegionSignals(region, items = []) {
+  const r = String(region || "").trim();
+  if (!r) return 0;
+  return items.filter((item) => {
+    const joined = `${item.title || ""} ${item.snippet || ""} ${item.mallName || ""}`;
+    return joined.includes(r);
+  }).length;
+}
+
+function buildEvidence(input, blog, shopping, youtube) {
   const evidence = [];
-  if (homepage) {
+
+  (blog.items || []).slice(0, 4).forEach((item) => {
+    const score = clamp(
+      15 +
+      scoreNameMatch(input.companyName, item.title, item.snippet, item.blogName) * 0.5 +
+      (item.title.includes("공식") ? 10 : 0),
+      0,
+      100
+    );
+
     evidence.push({
-      title: homepage.title || "공식 홈페이지 후보",
-      platform: "Google Search",
-      reason: `공식 홈페이지 후보가 발견되었습니다. 매칭 점수 ${homepage.matchScore}`,
-      url: homepage.url
+      type: "blog-mention",
+      source: item.source,
+      title: item.title,
+      url: item.url,
+      snippet: item.snippet,
+      score: round(score),
+      meta: {
+        query: item.query,
+        blogName: item.blogName,
+        postDate: item.postDate
+      }
     });
-  }
-  if (instagram) {
+  });
+
+  (shopping.items || []).slice(0, 6).forEach((item) => {
+    const score = clamp(
+      20 +
+      scoreNameMatch(input.companyName, item.title, item.mallName, item.brand, item.maker) * 0.6 +
+      (getHostname(item.url).includes("smartstore.naver.com") ? 12 : 0),
+      0,
+      100
+    );
+
     evidence.push({
-      title: instagram.title || "Instagram 후보",
-      platform: "Google Search",
-      reason: `인스타그램 후보가 발견되었습니다. 매칭 점수 ${instagram.matchScore}`,
-      url: instagram.url
+      type: "shopping-item",
+      source: item.source,
+      title: item.title,
+      url: item.url,
+      snippet: [item.mallName, item.brand, item.category1, item.category2].filter(Boolean).join(" / "),
+      score: round(score),
+      meta: {
+        lprice: item.lprice,
+        mallName: item.mallName,
+        brand: item.brand
+      }
     });
-  }
-  if (youtube) {
+  });
+
+  if (youtube.best) {
     evidence.push({
-      title: youtube.title || "YouTube 후보",
-      platform: "Google Search",
-      reason: `유튜브 채널 후보가 발견되었습니다. 매칭 점수 ${youtube.matchScore}`,
-      url: youtube.url
-    });
-  }
-  if (naverStore) {
-    evidence.push({
-      title: naverStore.title || "NAVER 스토어 후보",
-      platform: "Google Search",
-      reason: `네이버 스토어 후보가 발견되었습니다. 매칭 점수 ${naverStore.matchScore}`,
-      url: naverStore.url
-    });
-  }
-  if (map) {
-    evidence.push({
-      title: map.title || "지도/플랫폼 후보",
-      platform: "Google Search",
-      reason: `지도성 노출 후보가 발견되었습니다. 매칭 점수 ${map.matchScore}`,
-      url: map.url
+      type: "youtube-channel",
+      source: youtube.best.source,
+      title: youtube.best.title,
+      url: youtube.best.url,
+      snippet: youtube.best.snippet,
+      score: youtube.best.score,
+      meta: {
+        subscribers: youtube.best.subscribers,
+        videoCount: youtube.best.videoCount,
+        viewCount: youtube.best.viewCount
+      }
     });
   }
 
+  return evidence
+    .sort((a, b) => (b.score || 0) - (a.score || 0))
+    .slice(0, 12);
+}
+
+async function runPageSpeed(url) {
+  if (!url || !ENV.PAGESPEED_API_KEY) return null;
+
+  const mobileUrl =
+    `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(url)}` +
+    `&strategy=mobile&key=${encodeURIComponent(ENV.PAGESPEED_API_KEY)}`;
+
+  const desktopUrl =
+    `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(url)}` +
+    `&strategy=desktop&key=${encodeURIComponent(ENV.PAGESPEED_API_KEY)}`;
+
+  const [mobileRes, desktopRes] = await Promise.allSettled([
+    fetchJson(mobileUrl, {}, 20000),
+    fetchJson(desktopUrl, {}, 20000)
+  ]);
+
+  function parseScore(result) {
+    if (result.status !== "fulfilled" || !result.value.ok) return null;
+    const score = result.value.data?.lighthouseResult?.categories?.performance?.score;
+    if (typeof score !== "number") return null;
+    return Math.round(score * 100);
+  }
+
+  const mobileScore = parseScore(mobileRes);
+  const desktopScore = parseScore(desktopRes);
+
+  if (mobileScore == null && desktopScore == null) return null;
+
   return {
-    raw,
-    warnings,
-    assets: {
-      homepage,
-      instagram,
-      youtube,
-      naverStore,
-      map
-    },
-    evidence
+    mobile: mobileScore,
+    desktop: desktopScore,
+    average: round(((mobileScore ?? desktopScore ?? 0) + (desktopScore ?? mobileScore ?? 0)) / 2)
   };
 }
 
-function getIndustryLabel(industry = "") {
-  const map = {
-    it: "IT / B2B / SaaS",
-    local: "소상공인 / 로컬 서비스",
-    ecommerce: "이커머스 / 쇼핑몰",
-    professional: "전문 서비스 / 컨설팅",
-    creator: "지식형 / 콘텐츠형"
-  };
-  return map[industry] || "기타";
-}
+function computeScores(input, discovery, sourceStatus, evidence) {
+  const blogCount = discovery.counts.naverBlogItems;
+  const shoppingCount = discovery.counts.naverShoppingItems;
+  const regionHits = discovery.counts.regionHits;
+  const assetCount = discovery.counts.assetCount;
 
-function calculateScores(discovery = {}, industry = "") {
-  const assets = discovery.assets || {};
+  const homepage = discovery.assetDetails.homepage;
+  const naverStore = discovery.assetDetails.naverStore;
+  const youtube = discovery.assetDetails.youtube;
+  const pageSpeed = discovery.pageSpeed;
 
-  const hasHomepage = !!assets.homepage;
-  const hasInstagram = !!assets.instagram;
-  const hasYoutube = !!assets.youtube;
-  const hasStore = !!assets.naverStore;
-  const hasMap = !!assets.map;
+  let searchVisibility =
+    18 +
+    clamp(Math.log10(blogCount + 1) * 18, 0, 28) +
+    clamp(Math.log10(shoppingCount + 1) * 22, 0, 32) +
+    (homepage ? 12 : 0) +
+    (naverStore ? 12 : 0);
 
-  let searchVisibility = 0;
-  searchVisibility += hasHomepage ? 30 : 0;
-  searchVisibility += hasMap ? 20 : 0;
-  searchVisibility += hasStore ? 18 : 0;
-  searchVisibility += hasInstagram ? 12 : 0;
-  searchVisibility += hasYoutube ? 12 : 0;
-  searchVisibility = clamp(searchVisibility, 0, 100);
+  let contentPresence =
+    12 +
+    (youtube ? 35 : 0) +
+    clamp((youtube?.subscribers ? Math.log10(youtube.subscribers + 1) * 8 : 0), 0, 20) +
+    clamp(evidence.filter((e) => e.type === "blog-mention").length * 4, 0, 16);
 
-  let contentPresence = 0;
-  contentPresence += hasInstagram ? 35 : 0;
-  contentPresence += hasYoutube ? 35 : 0;
-  contentPresence += hasHomepage ? 15 : 0;
-  contentPresence += hasStore ? 10 : 0;
-  contentPresence = clamp(contentPresence, 0, 100);
+  let localExposure =
+    input.region
+      ? 18 + clamp(regionHits * 12, 0, 48) + (naverStore ? 8 : 0)
+      : 28 + clamp((blogCount + shoppingCount) * 2, 0, 28);
 
-  let localExposure = 0;
-  localExposure += hasMap ? 45 : 0;
-  localExposure += hasStore ? 20 : 0;
-  localExposure += hasInstagram ? 10 : 0;
-  localExposure += hasHomepage ? 10 : 0;
-  localExposure = clamp(localExposure, 0, 100);
-
-  let webQuality = 0;
-  webQuality += hasHomepage ? 55 : 0;
-  webQuality += hasInstagram ? 10 : 0;
-  webQuality += hasYoutube ? 10 : 0;
-  webQuality = clamp(webQuality, 0, 100);
-
-  let overall = 0;
-
-  switch (industry) {
-    case "it":
-      overall = Math.round(searchVisibility * 0.30 + contentPresence * 0.15 + localExposure * 0.05 + webQuality * 0.50);
-      break;
-    case "local":
-      overall = Math.round(searchVisibility * 0.25 + contentPresence * 0.15 + localExposure * 0.40 + webQuality * 0.20);
-      break;
-    case "ecommerce":
-      overall = Math.round(searchVisibility * 0.28 + contentPresence * 0.22 + localExposure * 0.12 + webQuality * 0.38);
-      break;
-    case "professional":
-      overall = Math.round(searchVisibility * 0.30 + contentPresence * 0.12 + localExposure * 0.13 + webQuality * 0.45);
-      break;
-    case "creator":
-      overall = Math.round(searchVisibility * 0.20 + contentPresence * 0.45 + localExposure * 0.05 + webQuality * 0.30);
-      break;
-    default:
-      overall = Math.round(searchVisibility * 0.25 + contentPresence * 0.20 + localExposure * 0.15 + webQuality * 0.40);
-      break;
+  let webQuality;
+  if (pageSpeed?.average != null) {
+    webQuality = clamp(pageSpeed.average, 15, 100);
+  } else if (homepage) {
+    webQuality = 38;
+  } else {
+    webQuality = 24;
   }
 
+  searchVisibility = round(clamp(searchVisibility, 0, 100));
+  contentPresence = round(clamp(contentPresence, 0, 100));
+  localExposure = round(clamp(localExposure, 0, 100));
+  webQuality = round(clamp(webQuality, 0, 100));
+
+  const sourceBonus =
+    (sourceStatus.naverBlog.ok ? 4 : 0) +
+    (sourceStatus.naverShopping.ok ? 4 : 0) +
+    (sourceStatus.youtube.ok ? 4 : 0) +
+    (assetCount >= 2 ? 4 : 0);
+
+  const overall = round(clamp(
+    searchVisibility * 0.34 +
+    contentPresence * 0.26 +
+    localExposure * 0.18 +
+    webQuality * 0.22 +
+    sourceBonus,
+    0,
+    100
+  ));
+
   return {
-    overall: clamp(overall, 0, 100),
+    overall,
     searchVisibility,
     contentPresence,
     localExposure,
@@ -466,149 +684,347 @@ function calculateScores(discovery = {}, industry = "") {
   };
 }
 
-function buildDiagnosis({ companyName, industry, region, discovery, scores }) {
-  const assets = discovery.assets || {};
-  const wins = [];
-  const risks = [];
-  const nextActions = [];
-  const limits = [];
+function computeConfidence(discovery, sourceStatus, evidence) {
+  const assetCount = discovery.counts.assetCount;
+  const strongEvidence = evidence.filter((e) => (e.score || 0) >= 60).length;
+  const sourceOkCount = [
+    sourceStatus.naverBlog.ok,
+    sourceStatus.naverShopping.ok,
+    sourceStatus.youtube.ok
+  ].filter(Boolean).length;
 
-  const foundCount = [assets.homepage, assets.instagram, assets.youtube, assets.naverStore, assets.map].filter(Boolean).length;
-
-  let confidence = "낮음";
-  let confidenceDescription = "발견 자산 수가 적어 초기 후보 수준의 진단입니다.";
-
-  if (foundCount >= 4) {
-    confidence = "높음";
-    confidenceDescription = "복수 플랫폼에서 브랜드 후보가 확인되어 신뢰도가 높은 편입니다.";
-  } else if (foundCount >= 2) {
-    confidence = "중간";
-    confidenceDescription = "일부 핵심 자산이 발견되었지만 추가 확인이 필요합니다.";
+  if (assetCount >= 3 || (strongEvidence >= 4 && sourceOkCount >= 2)) {
+    return {
+      level: "높음",
+      description: "복수 채널에서 자산과 언급 흔적이 확인되어 1차 진단 신뢰도가 높은 편입니다."
+    };
   }
 
-  if (assets.homepage) {
-    wins.push("공식 홈페이지 후보가 확인되어 브랜드 검색 후 자사 자산으로 연결될 가능성이 있습니다.");
-  } else {
-    risks.push("공식 홈페이지 후보가 약해 검색 유입이 외부 플랫폼으로 분산될 수 있습니다.");
-    nextActions.push("브랜드명 검색 시 바로 식별되는 공식 홈페이지/대표 랜딩페이지를 먼저 확보하세요.");
-  }
-
-  if (assets.instagram) {
-    wins.push("Instagram 후보가 확인되어 소셜 접점이 존재합니다.");
-  } else {
-    risks.push("Instagram 후보가 뚜렷하지 않아 소셜 신뢰 자산이 약할 수 있습니다.");
-    if (["local", "ecommerce", "creator"].includes(industry)) {
-      nextActions.push("Instagram 계정명을 브랜드명과 최대한 일치시키고 프로필 링크를 정리하세요.");
-    }
-  }
-
-  if (assets.youtube) {
-    wins.push("YouTube 후보가 확인되어 검색형 콘텐츠 자산 확장 가능성이 있습니다.");
-  } else {
-    if (["it", "professional", "creator"].includes(industry)) {
-      risks.push("YouTube 채널 후보가 없어 검색형/설명형 콘텐츠 자산이 부족할 수 있습니다.");
-      nextActions.push("브랜드명 기준 YouTube 채널을 정리하고 대표 영상 몇 개를 먼저 축적하세요.");
-    }
-  }
-
-  if (assets.naverStore) {
-    wins.push("NAVER 스토어 후보가 확인되어 구매 연결 지점이 일부 보입니다.");
-  } else if (industry === "ecommerce") {
-    risks.push("이커머스 업종인데 NAVER 스토어/쇼핑 흔적이 약합니다.");
-    nextActions.push("네이버 쇼핑/스토어 노출 경로를 우선 확보하세요.");
-  }
-
-  if (assets.map) {
-    wins.push("지도/플랫폼 노출 후보가 확인되었습니다.");
-  } else if (industry === "local") {
-    risks.push("로컬 업종인데 지도성 노출 후보가 약합니다.");
-    nextActions.push("지도/플랫폼 프로필과 지역 키워드 노출 구조를 먼저 정리하세요.");
-  }
-
-  if (!nextActions.length) {
-    nextActions.push("다음 단계에서 NAVER API를 붙여 블로그/쇼핑/지역 데이터를 실제값으로 교체하세요.");
-    nextActions.push("그 다음 YouTube Data API와 PageSpeed를 연결해 수치를 보강하세요.");
-  }
-
-  limits.push("현재 단계는 Google Search 기반 1차 탐색 결과입니다.");
-  limits.push("NAVER 블로그/쇼핑/지역의 실제 API 데이터는 아직 반영되지 않았습니다.");
-  limits.push("유튜브 통계, 홈페이지 속도, AI 서술 보강은 다음 단계에서 추가됩니다.");
-
-  let executiveSummary = `${companyName}의 공개 웹 후보 자산을 바탕으로 초기 탐색을 완료했습니다.`;
-  if (scores.overall >= 70) {
-    executiveSummary = `${companyName}은(는) 공개 웹 기준 핵심 자산이 비교적 잘 드러나는 편입니다.`;
-  } else if (scores.overall >= 45) {
-    executiveSummary = `${companyName}은(는) 일부 자산은 보이지만 플랫폼 간 연결성과 노출 완성도는 아직 보강이 필요합니다.`;
-  } else {
-    executiveSummary = `${companyName}은(는) 공개 웹에서 핵심 브랜드 자산 노출이 아직 약한 편입니다.`;
+  if (assetCount >= 1 || strongEvidence >= 2 || sourceOkCount >= 2) {
+    return {
+      level: "중간",
+      description: "일부 자산 또는 반복 언급은 확인되지만 공식 자산 확정이 더 필요합니다."
+    };
   }
 
   return {
-    industryLabel: getIndustryLabel(industry),
-    confidence,
-    confidenceDescription,
-    executiveSummary,
-    scores,
-    wins,
-    risks,
-    nextActions,
-    limits
+    level: "낮음",
+    description: "자산 확정 신호가 적어 초기 후보 수준의 진단입니다."
   };
 }
 
-export default async function handler(req, res) {
+function buildFallbackNarrative(input, discovery, scores, evidence, confidence) {
+  const wins = [];
+  const risks = [];
+  const nextActions = [];
+
+  if (discovery.assetDetails.naverStore) {
+    wins.push("네이버 쇼핑/스토어 계열 노출 흔적이 확인되어 구매 접점은 일부 확보된 상태입니다.");
+  }
+  if (discovery.assetDetails.youtube) {
+    wins.push("유튜브 채널 후보가 확인되어 콘텐츠 자산 기반의 확장 가능성이 있습니다.");
+  }
+  if (evidence.filter((e) => e.type === "blog-mention").length >= 2) {
+    wins.push("네이버 블로그 언급이 반복적으로 발견되어 브랜드 언급 기반은 형성되어 있습니다.");
+  }
+
+  if (!discovery.assetDetails.homepage) {
+    risks.push("공식 홈페이지 후보가 아직 확정되지 않아 브랜드 검색 유입이 외부 플랫폼에 분산될 수 있습니다.");
+  }
+  if (!discovery.assetDetails.youtube) {
+    risks.push("유튜브 공식 채널 신호가 약해 영상 기반 신뢰 축적이 제한될 수 있습니다.");
+  }
+  if (normalizeText(input.industry).includes("이커머스") || normalizeText(input.industry).includes("쇼핑몰")) {
+    if (!discovery.assetDetails.naverStore) {
+      risks.push("이커머스 업종인데 NAVER Shopping/스토어 계열 자산 신호가 약합니다.");
+    }
+  }
+  if (scores.webQuality < 40) {
+    risks.push("웹 품질 신호가 부족하거나 속도 측정 대상 홈페이지가 확정되지 않았습니다.");
+  }
+
+  if (!discovery.assetDetails.homepage) {
+    nextActions.push("브랜드명 검색 시 바로 식별되는 공식 홈페이지 또는 대표 랜딩페이지를 먼저 확정하세요.");
+  }
+  if (!discovery.assetDetails.youtube) {
+    nextActions.push("브랜드명과 일치하는 유튜브 공식 채널 운영 여부를 정리하고 프로필·설명·링크를 통일하세요.");
+  }
+  if (!discovery.assetDetails.naverStore) {
+    nextActions.push("네이버 쇼핑/스마트스토어/상품 연동 여부를 점검해 검색 노출 접점을 보강하세요.");
+  }
+
+  const executiveSummary =
+    discovery.counts.assetCount >= 2
+      ? `${input.companyName}은(는) NAVER와 YouTube 기준으로 일부 공개 자산이 확인되며, 현재는 검색 가시성과 전환 접점을 더 구조화할 단계입니다.`
+      : `${input.companyName}은(는) NAVER·YouTube 기준 초기 언급 신호는 있으나 공식 자산 확정이 부족해 브랜드 검색 경험이 약하게 보일 수 있습니다.`;
+
+  return {
+    industryLabel: pickIndustryLabel(input.industry),
+    executiveSummary,
+    wins: wins.slice(0, 3),
+    risks: risks.slice(0, 3),
+    nextActions: nextActions.slice(0, 3)
+  };
+}
+
+async function buildNarrativeWithGemini(input, discovery, scores, evidence, confidence) {
+  if (!ENV.GEMINI_API_KEY) {
+    return buildFallbackNarrative(input, discovery, scores, evidence, confidence);
+  }
+
+  const payload = {
+    input: {
+      companyName: input.companyName,
+      industry: pickIndustryLabel(input.industry),
+      region: input.region || null
+    },
+    assets: {
+      hasHomepage: !!discovery.assetDetails.homepage,
+      hasYouTube: !!discovery.assetDetails.youtube,
+      hasNaverStore: !!discovery.assetDetails.naverStore,
+      hasInstagram: !!discovery.assetDetails.instagram,
+      hasMap: !!discovery.assetDetails.map
+    },
+    scores,
+    confidence,
+    evidence: evidence.slice(0, 6).map((e) => ({
+      type: e.type,
+      title: e.title,
+      snippet: e.snippet,
+      score: e.score
+    }))
+  };
+
+  const prompt = [
+    "너는 한국 SMB 마케팅 진단 어시스턴트다.",
+    "아래 JSON을 바탕으로 1차 진단 요약을 작성하라.",
+    "반드시 JSON으로만 응답하라.",
+    "키는 industryLabel, executiveSummary, wins, risks, nextActions 만 사용하라.",
+    "wins, risks, nextActions 는 각각 최대 3개 항목의 배열이어야 한다.",
+    "과장 금지. 확인된 증거만 반영하라.",
+    JSON.stringify(payload)
+  ].join("\n");
+
+  const url =
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(ENV.GEMINI_MODEL)}:generateContent?key=${encodeURIComponent(ENV.GEMINI_API_KEY)}`;
+
+  const body = {
+    contents: [
+      {
+        role: "user",
+        parts: [{ text: prompt }]
+      }
+    ],
+    generationConfig: {
+      temperature: 0.2,
+      responseMimeType: "application/json"
+    }
+  };
+
   try {
-    if (req.method !== "POST") {
-      return res.status(405).json({
-        error: "method_not_allowed",
-        message: "POST 요청만 허용됩니다."
-      });
+    const result = await fetchJson(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body)
+    }, 25000);
+
+    if (!result.ok) {
+      return buildFallbackNarrative(input, discovery, scores, evidence, confidence);
     }
 
-    let body = req.body || {};
-    if (typeof body === "string") {
-      body = JSON.parse(body);
+    const text =
+      result.data?.candidates?.[0]?.content?.parts
+        ?.map((p) => p?.text || "")
+        .join("")
+        .trim() || "";
+
+    const parsed = tryParseJson(text, null);
+    if (!parsed) {
+      return buildFallbackNarrative(input, discovery, scores, evidence, confidence);
     }
 
-    const { companyName, industry, region, email } = body;
+    return {
+      industryLabel: parsed.industryLabel || pickIndustryLabel(input.industry),
+      executiveSummary: parsed.executiveSummary || buildFallbackNarrative(input, discovery, scores, evidence, confidence).executiveSummary,
+      wins: Array.isArray(parsed.wins) ? parsed.wins.slice(0, 3) : [],
+      risks: Array.isArray(parsed.risks) ? parsed.risks.slice(0, 3) : [],
+      nextActions: Array.isArray(parsed.nextActions) ? parsed.nextActions.slice(0, 3) : []
+    };
+  } catch {
+    return buildFallbackNarrative(input, discovery, scores, evidence, confidence);
+  }
+}
 
-    if (!companyName || !industry || !region || !email) {
-      return res.status(400).json({
-        error: "missing_fields",
-        message: "업체명, 업종, 지역, 이메일을 모두 입력해주세요."
-      });
-    }
+function compactAssetCount(assetDetails) {
+  return ["homepage", "instagram", "youtube", "naverStore", "map"]
+    .map((k) => assetDetails[k])
+    .filter(Boolean).length;
+}
 
-    const discovery = await discoverGoogleAssets({ companyName, region });
-    const scores = calculateScores(discovery, industry);
-    const diagnosis = buildDiagnosis({
-      companyName,
-      industry,
-      region,
-      discovery,
-      scores
+export default async function handler(req, res) {
+  setCommonHeaders(res);
+
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+
+  if (req.method === "GET") {
+    return res.status(200).json({
+      ok: true,
+      message: "analyze route works",
+      mode: "google-custom-search-removed",
+      env: {
+        hasGemini: !!ENV.GEMINI_API_KEY,
+        hasYouTube: !!ENV.YOUTUBE_API_KEY,
+        hasNaver: !!(ENV.NAVER_CLIENT_ID && ENV.NAVER_CLIENT_SECRET),
+        hasPageSpeed: !!ENV.PAGESPEED_API_KEY
+      }
     });
+  }
+
+  if (req.method !== "POST") {
+    return res.status(405).json({
+      ok: false,
+      message: "Method not allowed"
+    });
+  }
+
+  try {
+    const body = await readBody(req);
+
+    const input = {
+      companyName: String(body.companyName || body.company || "").trim(),
+      industry: String(body.industry || "").trim(),
+      region: String(body.region || "").trim(),
+      email: String(body.email || "").trim()
+    };
+
+    if (!input.companyName) {
+      return res.status(400).json({
+        ok: false,
+        message: "companyName is required"
+      });
+    }
+
+    if (input.email && !isEmail(input.email)) {
+      return res.status(400).json({
+        ok: false,
+        message: "email format is invalid"
+      });
+    }
+
+    const [blog, shopping, youtube] = await Promise.all([
+      searchNaverBlog(input),
+      searchNaverShopping(input),
+      searchYouTube(input)
+    ]);
+
+    const naverStore = pickNaverStore(input, shopping.items || []);
+    const homepage = inferHomepage(input, shopping.items || []);
+    const youtubeAsset = youtube.best
+      ? {
+          title: youtube.best.title,
+          url: youtube.best.url,
+          source: "youtube",
+          confidence: youtube.best.confidence,
+          snippet: youtube.best.snippet,
+          subscribers: youtube.best.subscribers,
+          videoCount: youtube.best.videoCount,
+          viewCount: youtube.best.viewCount
+        }
+      : null;
+
+    const instagram = null;
+    const map = null;
+
+    const pageSpeed = homepage?.url ? await runPageSpeed(homepage.url) : null;
+
+    const assetDetails = {
+      homepage,
+      instagram,
+      youtube: youtubeAsset,
+      naverStore,
+      map
+    };
+
+    const discovery = {
+      assets: {
+        homepage: homepage?.url || null,
+        instagram: instagram?.url || null,
+        youtube: youtubeAsset?.url || null,
+        naverStore: naverStore?.url || null,
+        map: map?.url || null
+      },
+      assetDetails,
+      pageSpeed,
+      counts: {
+        naverBlogItems: (blog.items || []).length,
+        naverShoppingItems: (shopping.items || []).length,
+        regionHits: countRegionSignals(input.region, [
+          ...(blog.items || []),
+          ...(shopping.items || [])
+        ]),
+        assetCount: compactAssetCount(assetDetails)
+      },
+      sourceStatus: {
+        naverBlog: {
+          ok: blog.ok,
+          total: blog.total,
+          errorCount: (blog.errors || []).length
+        },
+        naverShopping: {
+          ok: shopping.ok,
+          total: shopping.total,
+          errorCount: (shopping.errors || []).length
+        },
+        youtube: {
+          ok: youtube.ok,
+          candidateCount: (youtube.items || []).length,
+          error: youtube.error || null
+        },
+        pageSpeed: {
+          ok: !!pageSpeed
+        }
+      }
+    };
+
+    const evidence = buildEvidence(input, blog, shopping, youtube);
+    const confidence = computeConfidence(discovery, discovery.sourceStatus, evidence);
+    const scores = computeScores(input, discovery, discovery.sourceStatus, evidence);
+    const narrative = await buildNarrativeWithGemini(input, discovery, scores, evidence, confidence);
+
+    const diagnosis = {
+      industryLabel: narrative.industryLabel || pickIndustryLabel(input.industry),
+      confidence: confidence.level,
+      confidenceDescription: confidence.description,
+      executiveSummary: narrative.executiveSummary,
+      scores,
+      wins: Array.isArray(narrative.wins) ? narrative.wins : [],
+      risks: Array.isArray(narrative.risks) ? narrative.risks : [],
+      nextActions: Array.isArray(narrative.nextActions) ? narrative.nextActions : [],
+      limits: [
+        "현재 버전은 Google Custom Search 없이 NAVER Blog/Shopping, YouTube, PageSpeed 기준으로 1차 진단합니다.",
+        "공식 홈페이지/인스타그램/지도 자산은 강한 증거가 있을 때만 확정하며, 일부 업체는 null로 남을 수 있습니다.",
+        "URL 직접 입력 기능이나 추가 검색 소스를 붙이면 자산 확정률을 더 높일 수 있습니다."
+      ]
+    };
 
     return res.status(200).json({
-      input: {
-        companyName,
-        industry,
-        region,
-        email
-      },
-      discovery: {
-        assets: discovery.assets,
-        pageSpeed: null
-      },
+      ok: true,
+      input,
+      discovery,
       diagnosis,
-      evidence: discovery.evidence
+      evidence
     });
   } catch (error) {
-    console.error("analyze.js crash:", error);
+    console.error("analyze fatal error:", error);
 
     return res.status(500).json({
-      error: "server_crash",
-      message: error.message || "unknown error"
+      ok: false,
+      message: "analyze failed",
+      error: error?.message || "unknown error"
     });
   }
 }
