@@ -111,12 +111,12 @@ window.addEventListener("DOMContentLoaded", () => {
     ];
 
     const html = rows.map((row) => {
-      const value = Number(scores[row.key] || 0);
+      const value = Number(scores?.[row.key] ?? 0);
       return `
         <div class="score-row">
           <label>${row.label}</label>
           <div class="score-bar-wrap">
-            <div class="score-bar" style="width:${value}%"></div>
+            <div class="score-bar" style="width:${Math.max(0, Math.min(100, value))}%"></div>
           </div>
           <div class="score-value">${value}</div>
         </div>
@@ -127,53 +127,57 @@ window.addEventListener("DOMContentLoaded", () => {
   }
 
   function renderAssets(discovery = {}) {
-    const assets = discovery.assets || {};
+    const verified = discovery?.verified || {};
+    const pageSpeed = discovery?.pageSpeed || {};
     const cards = [];
 
     const addCard = (label, badge, item, extra = "") => {
-      if (!item) {
+      if (!item || !item.found) {
         cards.push(`
           <div class="asset-card">
             <div class="asset-top">
               <div>
-                <h4>${label}</h4>
+                <h4>${escapeHtml(label)}</h4>
                 <p>발견되지 않음</p>
               </div>
-              <span class="asset-badge">${badge}</span>
+              <span class="asset-badge">${escapeHtml(badge)}</span>
             </div>
           </div>
         `);
         return;
       }
 
+      const title = item.title || label;
+      const description =
+        item.reason === "ok"
+          ? "발견된 후보 자산"
+          : (item.reason || "발견된 후보 자산");
+
       cards.push(`
         <div class="asset-card">
           <div class="asset-top">
             <div>
-              <h4>${escapeHtml(item.title || label)}</h4>
-              <p>${escapeHtml(item.snippet || item.description || "발견된 후보 자산")}</p>
+              <h4>${escapeHtml(title)}</h4>
+              <p>${escapeHtml(description)}</p>
               ${item.url ? `<p style="margin-top:8px;"><a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.url)}</a></p>` : ""}
+              <p style="margin-top:8px;">신뢰도 ${escapeHtml(item.confidence || "-")} · 점수 ${Number(item.score ?? 0)}</p>
               ${extra}
             </div>
-            <span class="asset-badge">${badge}</span>
+            <span class="asset-badge">${escapeHtml(badge)}</span>
           </div>
         </div>
       `);
     };
 
-    const youtubeExtra = assets.youtube?.stats
-      ? `<p style="margin-top:8px;">구독자 ${Number(assets.youtube.stats.subscriberCount || 0).toLocaleString()} · 영상 ${Number(assets.youtube.stats.videoCount || 0).toLocaleString()}개 · 누적조회 ${Number(assets.youtube.stats.viewCount || 0).toLocaleString()}</p>`
-      : "";
+    const pageSpeedExtra = pageSpeed?.ok
+      ? `<p style="margin-top:8px;">PageSpeed 성능 ${Number(pageSpeed.performanceScore ?? 0)} / 접근성 ${Number(pageSpeed.accessibilityScore ?? 0)} / 권장사항 ${Number(pageSpeed.bestPracticesScore ?? 0)} / SEO ${Number(pageSpeed.seoScore ?? 0)}</p>`
+      : `<p style="margin-top:8px;">PageSpeed ${escapeHtml(pageSpeed?.error || "-")}</p>`;
 
-    const pageSpeedExtra = discovery.pageSpeed
-      ? `<p style="margin-top:8px;">PageSpeed 모바일 ${discovery.pageSpeed.mobile ?? "-"} / 데스크톱 ${discovery.pageSpeed.desktop ?? "-"}</p>`
-      : "";
-
-    addCard("공식 홈페이지 후보", "홈페이지", assets.homepage, pageSpeedExtra);
-    addCard("Instagram 후보", "인스타", assets.instagram);
-    addCard("YouTube 채널 후보", "유튜브", assets.youtube, youtubeExtra);
-    addCard("NAVER 쇼핑/스토어 후보", "스토어", assets.naverStore);
-    addCard("지도/플랫폼 후보", "지도", assets.map);
+    addCard("공식 홈페이지 후보", "홈페이지", verified.homepage, pageSpeedExtra);
+    addCard("Instagram 후보", "인스타", verified.instagram);
+    addCard("YouTube 채널 후보", "유튜브", verified.youtube);
+    addCard("NAVER 쇼핑/스토어 후보", "스토어", verified.naverStore);
+    addCard("지도/플랫폼 후보", "지도", verified.map);
 
     setHTML(assetList, cards.join(""));
   }
@@ -189,23 +193,33 @@ window.addEventListener("DOMContentLoaded", () => {
 
   function renderEvidence(items = []) {
     if (!evidenceList) return;
+
     if (!Array.isArray(items) || !items.length) {
       evidenceList.innerHTML = `<div class="evidence-card"><p>탐색 근거가 없습니다.</p></div>`;
       return;
     }
 
-    evidenceList.innerHTML = items.map((item) => `
-      <div class="evidence-card">
-        <div class="evidence-top">
-          <div>
-            <h4>${escapeHtml(item.title || "탐색 결과")}</h4>
-            <p>${escapeHtml(item.reason || "")}</p>
-            ${item.url ? `<p style="margin-top:8px;"><a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.url)}</a></p>` : ""}
+    evidenceList.innerHTML = items.map((item) => {
+      const badge = item.source || item.type || "근거";
+      const descParts = [];
+
+      if (item.mallName) descParts.push(`스토어: ${item.mallName}`);
+      if (typeof item.subscriberCount === "number") descParts.push(`구독자 ${item.subscriberCount.toLocaleString()}`);
+      if (item.type) descParts.push(`유형: ${item.type}`);
+
+      return `
+        <div class="evidence-card">
+          <div class="evidence-top">
+            <div>
+              <h4>${escapeHtml(item.title || "탐색 결과")}</h4>
+              <p>${escapeHtml(descParts.join(" · "))}</p>
+              ${item.url ? `<p style="margin-top:8px;"><a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.url)}</a></p>` : ""}
+            </div>
+            <span class="asset-badge">${escapeHtml(badge)}</span>
           </div>
-          <span class="asset-badge">${escapeHtml(item.platform || "근거")}</span>
         </div>
-      </div>
-    `).join("");
+      `;
+    }).join("");
   }
 
   function renderResult(data) {
@@ -214,21 +228,33 @@ window.addEventListener("DOMContentLoaded", () => {
     const input = data?.input || {};
     const discovery = data?.discovery || {};
     const diagnosis = data?.diagnosis || {};
-    const scores = diagnosis?.scores || {};
 
-    setText(resultMeta, `${input.companyName || "-"} · ${input.region || "-"} · ${diagnosis.industryLabel || "-"}`);
-    setText(overallScore, String(scores.overall ?? 0));
-    setText(confidenceText, diagnosis.confidence || "-");
-    setText(confidenceDesc, diagnosis.confidenceDescription || "-");
-    setText(executiveSummary, diagnosis.executiveSummary || "-");
+    // 핵심 수정: scores -> score
+    const scores = diagnosis?.score || {};
+
+    const overall = Number(scores?.overall ?? 0);
+    const confidence = diagnosis?.confidence ?? "-";
+    const confidenceDescription =
+      diagnosis?.confidenceDescription ||
+      `현재 탐색 신뢰도는 ${confidence}입니다.`;
+    const metaIndustry = input?.industry || "-";
+
+    setText(
+      resultMeta,
+      `${input.companyName || "-"} · ${input.region || "-"} · ${metaIndustry}`
+    );
+    setText(overallScore, String(overall));
+    setText(confidenceText, confidence);
+    setText(confidenceDesc, confidenceDescription);
+    setText(executiveSummary, diagnosis?.executiveSummary || "-");
 
     renderScores(scores);
     renderAssets(discovery);
-    renderBulletList(winsList, diagnosis.wins || []);
-    renderBulletList(risksList, diagnosis.risks || []);
-    renderBulletList(actionsList, diagnosis.nextActions || []);
-    renderBulletList(limitsList, diagnosis.limits || []);
-    renderEvidence(data.evidence || []);
+    renderBulletList(winsList, diagnosis?.wins || []);
+    renderBulletList(risksList, diagnosis?.risks || []);
+    renderBulletList(actionsList, diagnosis?.nextActions || []);
+    renderBulletList(limitsList, diagnosis?.limits || []);
+    renderEvidence(data?.evidence || []);
 
     if (loadingBox) loadingBox.classList.add("hidden");
     if (resultSection) resultSection.classList.remove("hidden");
