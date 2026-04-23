@@ -74,20 +74,88 @@ function noisePenalty(text) {
   if (/후기|리뷰|추천|맛집|체험단|중고|구매후기/i.test(z)) p += 8;
   return p;
 }
+function cleanBrandTokens(tokens = []) {
+  return uniqBy(
+    (tokens || [])
+      .filter(Boolean)
+      .filter(t => !/^https?/i.test(t))
+      .filter(t => !/\.(com|co\.kr|kr|org|net)/i.test(t))
+      .filter(t => String(t).length >= 2 && String(t).length <= 30),
+    x => x
+  );
+}
+
+function pathDepth(url = "") {
+  return pathOf(url).split("/").filter(Boolean).length;
+}
+
+function isThirdPartyHomepageHost(host = "") {
+  return /(tableau\.com|wikipedia\.org|namu\.wiki|blog\.naver\.com|m\.blog\.naver\.com|tv\.naver\.com|post\.naver\.com|news|press)/i.test(host);
+}
+
+function hasHostBrandHit(url = "", tokens = []) {
+  const h = normText(hostOf(url));
+  const cleaned = cleanBrandTokens(tokens);
+  return cleaned.some(t => t.length >= 5 && h.includes(normText(t)));
+}
+
+function hasStrictStoreBrand(text = "", url = "", companyName = "") {
+  const joined = normText(`${text} ${url}`);
+  const company = normText(companyName);
+
+  // 스토어는 '컬리' 같은 일반 단어 매칭 금지
+  return !!(
+    (company && joined.includes(company)) ||
+    joined.includes("marketkurly") ||
+    pathOf(url).includes("marketkurly")
+  );
+}
 
 function scoreHomepage(c, tokens) {
-  const title = stripHtml(c.title), desc = stripHtml(c.description), url = normUrl(c.link || c.url);
+  const title = stripHtml(c.title);
+  const desc = stripHtml(c.description);
+  const url = normUrl(c.link || c.url);
   const h = hostOf(url);
-  if (!url || SOCIAL.includes(h) || NOISY.includes(h)) return { score: 0, pass: false, reason: "noisy/social" };
+  const depth = pathDepth(url);
   const b = brandMatch(`${title} ${desc} ${url}`, tokens);
-  if (b.score <= 0) return { score: 0, pass: false, reason: "brand-gate" };
+
+  if (!url || SOCIAL.includes(h) || NOISY.includes(h)) {
+    return { score: 0, pass: false, reason: "noisy/social" };
+  }
+
+  if (b.score <= 0) {
+    return { score: 0, pass: false, reason: "brand-gate" };
+  }
+
   let score = 20 + b.score;
-  if (OFFICIAL_RE.test(`${title} ${desc}`)) score += 12;
-  if (!/\/(product|goods|items|detail|blog|news)\b/i.test(url)) score += 10;
+
+  // 공식 도메인처럼 보이면 강한 가점
+  if (hasHostBrandHit(url, tokens)) score += 22;
+
+  // 루트 홈페이지 우대
+  if (depth === 0) score += 18;
+  else if (depth >= 3) score -= 12;
+
+  // 일반 회사 도메인 우대
   if (/\.(co\.kr|com|kr)$/i.test(h)) score += 8;
+
+  // 3rd-party 강한 감점
+  if (isThirdPartyHomepageHost(h)) score -= 45;
+
+  // 공식 키워드는 자사 도메인 쪽에서만 의미 있게 반영
+  if (OFFICIAL_RE.test(`${title} ${desc}`) && !isThirdPartyHomepageHost(h)) {
+    score += 12;
+  }
+
   score -= noisePenalty(`${title} ${desc} ${url}`);
-  return { score: clamp(score), pass: score >= T.homepage, reason: "ok" };
+
+  return {
+    score: clamp(score),
+    pass: clamp(score) >= T.homepage,
+    reason: "ok"
+  };
 }
+
 
 function scoreInstagram(c, tokens) {
   const title = stripHtml(c.title), desc = stripHtml(c.description), url = normUrl(c.link || c.url);
@@ -101,18 +169,48 @@ function scoreInstagram(c, tokens) {
   return { score: clamp(score), pass: score >= T.instagram, reason: "ok" };
 }
 
-function scoreStore(c, tokens) {
-  const title = stripHtml(c.title), mall = stripHtml(c.mallName), desc = stripHtml(c.description), url = normUrl(c.link || c.url);
+function scoreStore(c, tokens, companyName = "") {
+  const title = stripHtml(c.title);
+  const mall = stripHtml(c.mallName);
+  const desc = stripHtml(c.description);
+  const url = normUrl(c.link || c.url);
   const h = hostOf(url);
-  const gate = hasBrandGate(`${title} ${mall} ${desc}`, url, tokens) || /smartstore\.naver\.com|brand\.naver\.com/i.test(h);
-  if (!gate) return { score: 0, pass: false, reason: "brand-gate" };
-  let score = 18 + brandMatch(`${title} ${mall} ${desc} ${url}`, tokens).score;
-  if (/공식스토어|공식몰|브랜드스토어/i.test(`${title} ${mall}`)) score += 18;
-  if (/smartstore\.naver\.com|brand\.naver\.com/i.test(h)) score += 12;
-  if (/product|products|goods|catalog/i.test(url)) score += 4;
+  const p = pathOf(url);
+
+  // 스토어는 회사명/marketkurly 직접 매치만 허용
+  if (!hasStrictStoreBrand(`${title} ${mall} ${desc}`, url, companyName)) {
+    return { score: 0, pass: false, reason: "strict-brand-gate" };
+  }
+
+  // 검색 카탈로그 상세는 공식 스토어로 보지 않음
+  if (/search\.shopping\.naver\.com$/i.test(h)) {
+    return { score: 0, pass: false, reason: "catalog-page" };
+  }
+
+  // smartstore의 /main/products/ 단건 상세는 공식 스토어로 보지 않음
+  if (/smartstore\.naver\.com$/i.test(h) && /^\/main\/products\//i.test(p)) {
+    return { score: 0, pass: false, reason: "product-detail" };
+  }
+
+  let score = 24 + brandMatch(`${title} ${mall} ${desc} ${url}`, cleanBrandTokens(tokens)).score;
+
+  if (/공식스토어|공식몰|브랜드스토어/i.test(`${title} ${mall}`)) score += 16;
+  if (/brand\.naver\.com$/i.test(h)) score += 28;
+
+  // smartstore seller root 형태만 우대
+  if (/smartstore\.naver\.com$/i.test(h) && p.split("/").filter(Boolean).length === 1) {
+    score += 18;
+  }
+
   score -= noisePenalty(`${title} ${mall} ${url}`);
-  return { score: clamp(score), pass: score >= T.naverStore, reason: "ok" };
+
+  return {
+    score: clamp(score),
+    pass: clamp(score) >= T.naverStore,
+    reason: "ok"
+  };
 }
+
 
 function scoreYoutube(c, tokens) {
   const title = stripHtml(c.title), desc = stripHtml(c.description), url = normUrl(c.url);
@@ -329,9 +427,18 @@ export default async function handler(req, res) {
     }).filter(x => x.score > 0);
 
     const storeCandidates = shopR.items.map(x => {
-      const r = scoreStore(x, tokens);
-      return { type: "naverStore", title: stripHtml(x.title), mallName: stripHtml(x.mallName), description: stripHtml(x.description), url: normUrl(x.link), score: r.score, reason: r.reason };
-    }).filter(x => x.score > 0);
+  const r = scoreStore(x, tokens, companyName);
+  return {
+    type: "naverStore",
+    title: stripHtml(x.title),
+    mallName: stripHtml(x.mallName),
+    description: stripHtml(x.description),
+    url: normUrl(x.link),
+    score: r.score,
+    reason: r.reason
+  };
+}).filter(x => x.score > 0);
+
 
     const youtubeCandidates = ytR.channels.map(x => {
       const r = scoreYoutube(x, tokens);
@@ -343,6 +450,23 @@ export default async function handler(req, res) {
     const igPick = chooseBest(instagramCandidates, T.instagram);
     const storePick = chooseBest(storeCandidates, T.naverStore);
     const ytPick = chooseBest(youtubeCandidates, T.youtube);
+
+// homepage: 3rd-party가 최종 선택되면 제외하고 재선택
+if (homePick.chosen && isThirdPartyHomepageHost(hostOf(homePick.chosen.url))) {
+  homePick.chosen =
+    [...homepageCandidates]
+      .filter(x => !isThirdPartyHomepageHost(hostOf(x.url)))
+      .sort((a, b) => b.score - a.score)[0] || null;
+}
+
+// naverStore: product detail 이 최종 선택되면 무효화
+if (storePick.chosen && /^\/main\/products\//i.test(pathOf(storePick.chosen.url))) {
+  storePick.chosen =
+    [...storeCandidates]
+      .filter(x => !/^\/main\/products\//i.test(pathOf(x.url)))
+      .sort((a, b) => b.score - a.score)[0] || null;
+}
+
 
     // 5) 검증 / 신뢰도
     const pageSpeed = await fetchPageSpeed(homePick.chosen?.url || "", pageSpeedKey);
