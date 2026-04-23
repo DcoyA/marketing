@@ -107,21 +107,23 @@ window.addEventListener("DOMContentLoaded", () => {
       { key: "searchVisibility", label: "검색 노출" },
       { key: "contentPresence", label: "콘텐츠 존재감" },
       { key: "localExposure", label: "로컬/플랫폼 노출" },
-      { key: "webQuality", label: "웹 품질" }
+      { key: "webQuality", label: "웹 품질" },
     ];
 
-    const html = rows.map((row) => {
-      const value = Number(scores?.[row.key] ?? 0);
-      return `
-        <div class="score-row">
-          <label>${row.label}</label>
-          <div class="score-bar-wrap">
-            <div class="score-bar" style="width:${Math.max(0, Math.min(100, value))}%"></div>
+    const html = rows
+      .map((row) => {
+        const value = Number(scores?.[row.key] ?? 0);
+        return `
+          <div class="score-row">
+            <label>${row.label}</label>
+            <div class="score-bar-wrap">
+              <div class="score-bar" style="width:${Math.max(0, Math.min(100, value))}%"></div>
+            </div>
+            <div class="score-value">${value}</div>
           </div>
-          <div class="score-value">${value}</div>
-        </div>
-      `;
-    }).join("");
+        `;
+      })
+      .join("");
 
     setHTML(scoreList, html);
   }
@@ -151,7 +153,7 @@ window.addEventListener("DOMContentLoaded", () => {
       const description =
         item.reason === "ok"
           ? "발견된 후보 자산"
-          : (item.reason || "발견된 후보 자산");
+          : item.reason || "발견된 후보 자산";
 
       cards.push(`
         <div class="asset-card">
@@ -159,8 +161,18 @@ window.addEventListener("DOMContentLoaded", () => {
             <div>
               <h4>${escapeHtml(title)}</h4>
               <p>${escapeHtml(description)}</p>
-              ${item.url ? `<p style="margin-top:8px;"><a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.url)}</a></p>` : ""}
-              <p style="margin-top:8px;">신뢰도 ${escapeHtml(item.confidence || "-")} · 점수 ${Number(item.score ?? 0)}</p>
+              ${
+                item.url
+                  ? `<p style="margin-top:8px;"><a href="${escapeHtml(
+                      item.url
+                    )}" target="_blank" rel="noopener noreferrer">${escapeHtml(
+                      item.url
+                    )}</a></p>`
+                  : ""
+              }
+              <p style="margin-top:8px;">신뢰도 ${escapeHtml(
+                item.confidence || "-"
+              )} · 점수 ${Number(item.score ?? 0)}</p>
               ${extra}
             </div>
             <span class="asset-badge">${escapeHtml(badge)}</span>
@@ -170,8 +182,14 @@ window.addEventListener("DOMContentLoaded", () => {
     };
 
     const pageSpeedExtra = pageSpeed?.ok
-      ? `<p style="margin-top:8px;">PageSpeed 성능 ${Number(pageSpeed.performanceScore ?? 0)} / 접근성 ${Number(pageSpeed.accessibilityScore ?? 0)} / 권장사항 ${Number(pageSpeed.bestPracticesScore ?? 0)} / SEO ${Number(pageSpeed.seoScore ?? 0)}</p>`
-      : `<p style="margin-top:8px;">PageSpeed ${escapeHtml(pageSpeed?.error || "-")}</p>`;
+      ? `<p style="margin-top:8px;">PageSpeed 성능 ${Number(
+          pageSpeed.performanceScore ?? 0
+        )} / 접근성 ${Number(pageSpeed.accessibilityScore ?? 0)} / 권장사항 ${Number(
+          pageSpeed.bestPracticesScore ?? 0
+        )} / SEO ${Number(pageSpeed.seoScore ?? 0)}</p>`
+      : `<p style="margin-top:8px;">PageSpeed ${escapeHtml(
+          pageSpeed?.error || "-"
+        )}</p>`;
 
     addCard("공식 홈페이지 후보", "홈페이지", verified.homepage, pageSpeedExtra);
     addCard("Instagram 후보", "인스타", verified.instagram);
@@ -199,27 +217,291 @@ window.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    evidenceList.innerHTML = items.map((item) => {
-      const badge = item.source || item.type || "근거";
-      const descParts = [];
+    evidenceList.innerHTML = items
+      .map((item) => {
+        const badge = item.source || item.type || "근거";
+        const descParts = [];
 
-      if (item.mallName) descParts.push(`스토어: ${item.mallName}`);
-      if (typeof item.subscriberCount === "number") descParts.push(`구독자 ${item.subscriberCount.toLocaleString()}`);
-      if (item.type) descParts.push(`유형: ${item.type}`);
+        if (item.mallName) descParts.push(`스토어: ${item.mallName}`);
+        if (typeof item.subscriberCount === "number")
+          descParts.push(`구독자 ${item.subscriberCount.toLocaleString()}`);
+        if (item.type) descParts.push(`유형: ${item.type}`);
 
-      return `
-        <div class="evidence-card">
-          <div class="evidence-top">
-            <div>
-              <h4>${escapeHtml(item.title || "탐색 결과")}</h4>
-              <p>${escapeHtml(descParts.join(" · "))}</p>
-              ${item.url ? `<p style="margin-top:8px;"><a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.url)}</a></p>` : ""}
+        return `
+          <div class="evidence-card">
+            <div class="evidence-top">
+              <div>
+                <h4>${escapeHtml(item.title || "탐색 결과")}</h4>
+                <p>${escapeHtml(descParts.join(" · "))}</p>
+                ${
+                  item.url
+                    ? `<p style="margin-top:8px;"><a href="${escapeHtml(
+                        item.url
+                      )}" target="_blank" rel="noopener noreferrer">${escapeHtml(
+                        item.url
+                      )}</a></p>`
+                    : ""
+                }
+              </div>
+              <span class="asset-badge">${escapeHtml(badge)}</span>
             </div>
-            <span class="asset-badge">${escapeHtml(badge)}</span>
           </div>
-        </div>
+        `;
+      })
+      .join("");
+  }
+
+  function ensureUiPatchStyles() {
+    if (document.getElementById("helloMediaUiPatchStyles")) return;
+
+    const style = document.createElement("style");
+    style.id = "helloMediaUiPatchStyles";
+    style.textContent = `
+      .deep-analysis-section {
+        margin-top: 28px;
+        padding: 28px;
+        border-radius: 24px;
+        background: rgba(255,255,255,0.75);
+        border: 1px solid rgba(240, 160, 190, 0.25);
+        box-shadow: 0 10px 30px rgba(230, 180, 200, 0.12);
+      }
+
+      .deep-analysis-title {
+        margin: 0 0 10px;
+        font-size: 28px;
+        font-weight: 800;
+        color: #1f1f1f;
+      }
+
+      .deep-analysis-desc {
+        margin: 0 0 18px;
+        color: #5f5f6f;
+        line-height: 1.7;
+      }
+
+      .deep-analysis-note {
+        width: 100%;
+        min-height: 120px;
+        border-radius: 16px;
+        border: 1px solid rgba(220, 160, 185, 0.35);
+        background: #fff;
+        padding: 16px 18px;
+        font-size: 15px;
+        line-height: 1.6;
+        outline: none;
+        resize: vertical;
+        box-sizing: border-box;
+      }
+
+      .deep-analysis-note:focus {
+        border-color: #e85d8f;
+        box-shadow: 0 0 0 4px rgba(232, 93, 143, 0.12);
+      }
+
+      .deep-analysis-actions {
+        margin-top: 16px;
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      .deep-analysis-btn {
+        border: none;
+        border-radius: 999px;
+        background: linear-gradient(135deg, #ea5b90, #ff7da8);
+        color: #fff;
+        padding: 14px 22px;
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+        box-shadow: 0 10px 24px rgba(234, 91, 144, 0.22);
+      }
+
+      .deep-analysis-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .deep-analysis-status {
+        font-size: 14px;
+        color: #5f5f6f;
+      }
+
+      .hello-media-footer {
+        margin: 42px 0 12px;
+        padding: 18px 12px 6px;
+        text-align: center;
+        color: #6d6d79;
+        font-size: 14px;
+        line-height: 1.8;
+      }
+
+      .hello-media-footer a {
+        color: #e85d8f;
+        text-decoration: none;
+      }
+
+      .hello-media-footer a:hover {
+        text-decoration: underline;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function hideLimitsSection() {
+    if (!limitsList) return;
+
+    const candidateContainer =
+      limitsList.closest(
+        '[data-role="limits-section"], .result-card, .content-card, .dashboard-card, .panel, .card, section, article'
+      ) || limitsList.parentElement;
+
+    if (candidateContainer && candidateContainer !== resultSection) {
+      candidateContainer.style.display = "none";
+    } else if (limitsList.parentElement) {
+      limitsList.parentElement.style.display = "none";
+    }
+
+    document.querySelectorAll("h1,h2,h3,h4,h5,p,span,div").forEach((el) => {
+      const text = (el.textContent || "").trim();
+      if (text === "현재 단계의 한계") {
+        const box =
+          el.closest(
+            '.result-card, .content-card, .dashboard-card, .panel, .card, section, article'
+          ) || el.parentElement;
+        if (box && box !== resultSection) {
+          box.style.display = "none";
+        } else {
+          el.style.display = "none";
+        }
+      }
+    });
+  }
+
+  function ensureFooter() {
+    ensureUiPatchStyles();
+
+    let footer = document.getElementById("helloMediaFooter");
+    if (!footer) {
+      footer = document.createElement("footer");
+      footer.id = "helloMediaFooter";
+      footer.className = "hello-media-footer";
+      footer.innerHTML = `
+        <div>HelloMedia All rights reserved</div>
+        <div><a href="mailto:iamborghini5757@gmail.com">iamborghini5757@gmail.com</a></div>
       `;
-    }).join("");
+      (resultSection?.parentElement || document.body).appendChild(footer);
+    }
+  }
+
+  function getDeepAnalysisSection() {
+    ensureUiPatchStyles();
+
+    let section = document.getElementById("deepAnalysisSection");
+    if (section) return section;
+
+    section = document.createElement("section");
+    section.id = "deepAnalysisSection";
+    section.className = "deep-analysis-section";
+    section.innerHTML = `
+      <h3 class="deep-analysis-title">심층분석 요청하기</h3>
+      <p class="deep-analysis-desc">
+        현재 진단 결과를 바탕으로 더 구체적인 마케팅 전략, 예산 설계, 채널 운영 방향이 필요하다면 심층분석을 요청할 수 있습니다.
+      </p>
+      <textarea
+        id="deepAnalysisNote"
+        class="deep-analysis-note"
+        placeholder="추가로 보고 싶은 내용이나 상담 희망 사항을 적어주세요. 예: 경쟁사 비교, 광고 예산안, 네이버/메타 운영 방향, 브랜드 검색 전략 등"
+      ></textarea>
+      <div class="deep-analysis-actions">
+        <button id="deepAnalysisBtn" class="deep-analysis-btn" type="button">심층분석 요청하기</button>
+        <span id="deepAnalysisStatus" class="deep-analysis-status"></span>
+      </div>
+    `;
+
+    if (resultSection) {
+      resultSection.appendChild(section);
+    } else {
+      document.body.appendChild(section);
+    }
+
+    return section;
+  }
+
+  async function postJson(url, payload) {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const rawText = await response.text();
+    let data = null;
+
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      throw new Error("API 응답이 JSON 형식이 아닙니다.");
+    }
+
+    if (!response.ok) {
+      throw new Error(data?.message || data?.error || "요청 처리 실패");
+    }
+
+    return data;
+  }
+
+  function bindDeepAnalysisButton(data) {
+    const section = getDeepAnalysisSection();
+    const noteEl = section.querySelector("#deepAnalysisNote");
+    const buttonEl = section.querySelector("#deepAnalysisBtn");
+    const statusEl = section.querySelector("#deepAnalysisStatus");
+
+    if (!buttonEl) return;
+
+    buttonEl.onclick = async () => {
+      try {
+        const payload = {
+          companyName: data?.input?.companyName || "",
+          industry: data?.input?.industry || "",
+          region: data?.input?.region || "",
+          email: data?.input?.email || "",
+          homepage: data?.discovery?.assets?.homepage || "",
+          instagram: data?.discovery?.assets?.instagram || "",
+          youtube: data?.discovery?.assets?.youtube || "",
+          note: noteEl?.value?.trim() || "",
+          requested_from: "website",
+        };
+
+        if (!payload.companyName || !payload.email) {
+          throw new Error("업체명 또는 이메일 정보가 없어 심층분석 요청을 보낼 수 없습니다.");
+        }
+
+        buttonEl.disabled = true;
+        buttonEl.textContent = "접수 중...";
+        if (statusEl) statusEl.textContent = "심층분석 요청을 저장하고 있습니다...";
+
+        const result = await postJson("/api/deep-analysis-request", payload);
+
+        if (statusEl) {
+          statusEl.textContent = `접수 완료되었습니다. 담당자가 확인 후 연락드리겠습니다.${
+            result?.rowNumber ? ` (접수번호: ${result.rowNumber})` : ""
+          }`;
+        }
+
+        buttonEl.textContent = "접수 완료";
+      } catch (error) {
+        console.error("deep analysis request error:", error);
+        if (statusEl) {
+          statusEl.textContent = `접수 실패: ${error.message}`;
+        }
+        buttonEl.disabled = false;
+        buttonEl.textContent = "심층분석 요청하기";
+      }
+    };
   }
 
   function renderResult(data) {
@@ -229,7 +511,6 @@ window.addEventListener("DOMContentLoaded", () => {
     const discovery = data?.discovery || {};
     const diagnosis = data?.diagnosis || {};
 
-    // 핵심 수정: scores -> score
     const scores = diagnosis?.score || {};
 
     const overall = Number(scores?.overall ?? 0);
@@ -253,8 +534,11 @@ window.addEventListener("DOMContentLoaded", () => {
     renderBulletList(winsList, diagnosis?.wins || []);
     renderBulletList(risksList, diagnosis?.risks || []);
     renderBulletList(actionsList, diagnosis?.nextActions || []);
-    renderBulletList(limitsList, diagnosis?.limits || []);
     renderEvidence(data?.evidence || []);
+
+    hideLimitsSection();
+    bindDeepAnalysisButton(data);
+    ensureFooter();
 
     if (loadingBox) loadingBox.classList.add("hidden");
     if (resultSection) resultSection.classList.remove("hidden");
@@ -268,7 +552,7 @@ window.addEventListener("DOMContentLoaded", () => {
       companyName: $("companyName")?.value?.trim() || "",
       industry: $("industry")?.value || "",
       region: $("region")?.value?.trim() || "",
-      email: $("email")?.value?.trim() || ""
+      email: $("email")?.value?.trim() || "",
     };
 
     console.log("payload:", payload);
@@ -286,16 +570,16 @@ window.addEventListener("DOMContentLoaded", () => {
     const timers = [
       setTimeout(() => setStage(1), 200),
       setTimeout(() => setStage(2), 900),
-      setTimeout(() => setStage(3), 1800)
+      setTimeout(() => setStage(3), 1800),
     ];
 
     try {
       const response = await fetch("/api/analyze", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       });
 
       console.log("response status:", response.status);
@@ -306,7 +590,7 @@ window.addEventListener("DOMContentLoaded", () => {
       let data;
       try {
         data = JSON.parse(rawText);
-      } catch (parseError) {
+      } catch {
         throw new Error("API 응답이 JSON 형식이 아닙니다.");
       }
 
