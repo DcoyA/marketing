@@ -4,6 +4,7 @@ const NAVER_WEBKR_API = "https://openapi.naver.com/v1/search/webkr.json";
 
 const YT_SEARCH_API = "https://www.googleapis.com/youtube/v3/search";
 const YT_CHANNELS_API = "https://www.googleapis.com/youtube/v3/channels";
+const PSI_API = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed";
 
 function s(v) {
   return String(v || "").trim();
@@ -69,15 +70,12 @@ function extractUrlsFromText(text = "") {
 function isInstagramProfileUrl(url = "") {
   const domain = extractDomain(url);
   if (!(domain === "instagram.com" || domain.endsWith(".instagram.com"))) return false;
-
   try {
     const path = new URL(url).pathname.toLowerCase();
     if (!path || path === "/") return false;
-    if (path.startsWith("/p/")) return false;
-    if (path.startsWith("/reel/")) return false;
-    if (path.startsWith("/reels/")) return false;
-    if (path.startsWith("/stories/")) return false;
-    if (path.startsWith("/explore/")) return false;
+    if (["/p/", "/reel/", "/reels/", "/stories/", "/explore/"].some((x) => path.startsWith(x))) {
+      return false;
+    }
     return true;
   } catch {
     return false;
@@ -87,7 +85,6 @@ function isInstagramProfileUrl(url = "") {
 function isHomepageCandidateUrl(url = "") {
   const domain = extractDomain(url);
   if (!domain) return false;
-
   const blocked = [
     "instagram.com",
     "youtube.com",
@@ -101,18 +98,7 @@ function isHomepageCandidateUrl(url = "") {
     "twitter.com",
     "tiktok.com",
   ];
-
   if (blocked.some((x) => domain.includes(x))) return false;
-
-  try {
-    const path = new URL(url).pathname.toLowerCase();
-    if (path.startsWith("/search")) return false;
-    if (path.startsWith("/p/")) return false;
-    if (path.startsWith("/reel/")) return false;
-  } catch {
-    return false;
-  }
-
   return true;
 }
 
@@ -136,7 +122,6 @@ function buildStatus(rows) {
     const items = Array.isArray(row?.data?.items) ? row.data.items : [];
     return acc + items.length;
   }, 0);
-
   const total = list.reduce((acc, row) => acc + n(row?.data?.total), 0);
   const errors = list.map((row) => row?.error).filter(Boolean);
 
@@ -197,7 +182,7 @@ function makeBaseResponse(input) {
           verified: false,
           confidence: "low",
           source: null,
-          reason: "stage 4: candidate only",
+          reason: "stage 5: candidate only",
           score: 0,
           candidateCount: 0,
           url: null,
@@ -208,7 +193,7 @@ function makeBaseResponse(input) {
           verified: false,
           confidence: "low",
           source: null,
-          reason: "stage 4: candidate only",
+          reason: "stage 5: candidate only",
           score: 0,
           candidateCount: 0,
           url: null,
@@ -219,7 +204,7 @@ function makeBaseResponse(input) {
           verified: false,
           confidence: "low",
           source: null,
-          reason: "stage 4: candidate only",
+          reason: "stage 5: candidate only",
           score: 0,
           candidateCount: 0,
           url: null,
@@ -230,7 +215,7 @@ function makeBaseResponse(input) {
           verified: false,
           confidence: "low",
           source: null,
-          reason: "stage 4: candidate only",
+          reason: "stage 5: candidate only",
           score: 0,
           candidateCount: 0,
           url: null,
@@ -241,7 +226,7 @@ function makeBaseResponse(input) {
           verified: false,
           confidence: "low",
           source: null,
-          reason: "stage 4: not connected",
+          reason: "stage 5: not connected",
           score: 0,
           candidateCount: 0,
           url: null,
@@ -250,7 +235,7 @@ function makeBaseResponse(input) {
       },
       pageSpeed: {
         ok: false,
-        error: "stage 4: not connected",
+        error: "stage 5: not run",
       },
       counts: {
         naverBlogItems: 0,
@@ -268,10 +253,7 @@ function makeBaseResponse(input) {
         naverWebHomepage: makeEmptyStatus(),
         naverWebInstagram: makeEmptyStatus(),
         youtube: makeEmptyStatus(),
-        pageSpeed: {
-          ...makeEmptyStatus(),
-          error: "not connected",
-        },
+        pageSpeed: makeEmptyStatus(),
       },
       rawCount: {
         naverBlogFetched: 0,
@@ -287,8 +269,8 @@ function makeBaseResponse(input) {
     diagnosis: {
       industryLabel: input.industry,
       confidence: "낮음",
-      confidenceDescription: "현재는 NAVER + YouTube 연결 여부만 확인하는 4단계 검증 모드입니다.",
-      executiveSummary: "JSON 응답과 NAVER/YouTube 후보 수집 여부를 점검하는 단계입니다.",
+      confidenceDescription: "현재는 NAVER + YouTube + PageSpeed 연결 여부만 확인하는 5단계 검증 모드입니다.",
+      executiveSummary: "JSON 응답과 NAVER/YouTube/PageSpeed 결과 수집 여부를 점검하는 단계입니다.",
       scores: {
         overall: 0,
         searchVisibility: 0,
@@ -300,26 +282,27 @@ function makeBaseResponse(input) {
       risks: [],
       nextActions: [],
       limits: [
-        "현재는 NAVER Blog + Shopping + WebKR + YouTube 후보만 연결된 4단계 버전입니다.",
+        "현재는 NAVER Blog + Shopping + WebKR + YouTube + PageSpeed까지만 연결된 5단계 버전입니다.",
       ],
     },
     evidence: [],
     prescription: {
       stage: {
-        code: "youtube-stage-4",
-        title: "YouTube 연결 점검 단계",
-        description: "JSON 반환과 NAVER/YouTube 후보 수집만 우선 검증합니다.",
+        code: "pagespeed-stage-5",
+        title: "PageSpeed 연결 점검 단계",
+        description: "JSON 반환과 NAVER/YouTube/PageSpeed 결과 수집만 우선 검증합니다.",
       },
-      priorityChannels: ["NAVER Blog", "NAVER Shopping", "NAVER WebKR", "YouTube"],
+      priorityChannels: ["NAVER Blog", "NAVER Shopping", "NAVER WebKR", "YouTube", "PageSpeed"],
       thirtyDayPlan: [],
       ninetyDayPlan: [],
     },
     debug: {
-      stage: "youtube-stage-4",
+      stage: "pagespeed-stage-5",
       env: {
         naverClientId: false,
         naverClientSecret: false,
         youtubeApiKey: false,
+        pageSpeedApiKey: false,
       },
       queries: {
         blog: [],
@@ -364,11 +347,8 @@ async function fetchJson(url, options = {}) {
 
 async function runNaverBatch({ endpoint, queries, headers, sourceLabel, debug }) {
   const rows = [];
-
   for (const query of queries) {
-    const url =
-      `${endpoint}?query=${encodeURIComponent(query)}&display=10&start=1&sort=sim`;
-
+    const url = `${endpoint}?query=${encodeURIComponent(query)}&display=10&start=1&sort=sim`;
     const result = await fetchJson(url, { headers });
     const items = Array.isArray(result?.data?.items) ? result.data.items : [];
     const total = n(result?.data?.total);
@@ -383,22 +363,15 @@ async function runNaverBatch({ endpoint, queries, headers, sourceLabel, debug })
       error: result.error,
     });
 
-    rows.push({
-      query,
-      source: sourceLabel,
-      ...result,
-    });
-
+    rows.push({ query, source: sourceLabel, ...result });
     if (result.status === 429) break;
     await new Promise((r) => setTimeout(r, 250));
   }
-
   return rows;
 }
 
 async function runYoutubeSearchBatch({ queries, apiKey, debug }) {
   const rows = [];
-
   for (const query of queries) {
     const url =
       `${YT_SEARCH_API}?part=snippet&type=channel&maxResults=8` +
@@ -417,28 +390,15 @@ async function runYoutubeSearchBatch({ queries, apiKey, debug }) {
       error: result.error,
     });
 
-    rows.push({
-      query,
-      source: "youtube-search",
-      ...result,
-    });
-
+    rows.push({ query, source: "youtube-search", ...result });
     await new Promise((r) => setTimeout(r, 180));
   }
-
   return rows;
 }
 
 async function fetchYoutubeChannels(channelIds, apiKey, debug) {
   const ids = uniqBy((channelIds || []).filter(Boolean), (x) => x);
-  if (!ids.length) {
-    return {
-      ok: true,
-      status: 200,
-      data: { items: [] },
-      error: null,
-    };
-  }
+  if (!ids.length) return { ok: true, status: 200, data: { items: [] }, error: null };
 
   const url =
     `${YT_CHANNELS_API}?part=snippet,statistics&id=${encodeURIComponent(ids.join(","))}` +
@@ -459,13 +419,38 @@ async function fetchYoutubeChannels(channelIds, apiKey, debug) {
   return result;
 }
 
+async function fetchPageSpeed(url, apiKey, debug) {
+  if (!url) {
+    return { ok: false, status: null, data: null, error: "homepage missing" };
+  }
+  if (!apiKey) {
+    return { ok: false, status: null, data: null, error: "PAGESPEED_API_KEY missing" };
+  }
+
+  const reqUrl =
+    `${PSI_API}?url=${encodeURIComponent(url)}` +
+    `&strategy=mobile&key=${encodeURIComponent(apiKey)}`;
+
+  const result = await fetchJson(reqUrl);
+
+  debug.requestLog.push({
+    source: "pagespeed",
+    query: extractDomain(url),
+    status: result.status,
+    ok: result.ok,
+    itemCount: result?.data ? 1 : 0,
+    total: result?.data ? 1 : 0,
+    error: result.error,
+  });
+
+  return result;
+}
+
 function buildBlogEvidence(rows) {
   const all = [];
-
   for (const row of rows || []) {
     const query = s(row?.query);
     const items = Array.isArray(row?.data?.items) ? row.data.items : [];
-
     for (const item of items) {
       all.push({
         type: "brand-mention",
@@ -482,17 +467,14 @@ function buildBlogEvidence(rows) {
       });
     }
   }
-
   return uniqBy(all, (x) => x.url).slice(0, 8);
 }
 
 function buildShoppingEvidence(rows) {
   const all = [];
-
   for (const row of rows || []) {
     const query = s(row?.query);
     const items = Array.isArray(row?.data?.items) ? row.data.items : [];
-
     for (const item of items) {
       all.push({
         type: "store-candidate",
@@ -512,17 +494,14 @@ function buildShoppingEvidence(rows) {
       });
     }
   }
-
   return uniqBy(all, (x) => x.url).slice(0, 8);
 }
 
 function buildHomepageCandidates(rows, companyName) {
   const out = [];
-
   for (const row of rows || []) {
     const query = s(row?.query);
     const items = Array.isArray(row?.data?.items) ? row.data.items : [];
-
     for (const item of items) {
       const title = stripHtml(item?.title);
       const snippet = stripHtml(item?.description);
@@ -551,17 +530,14 @@ function buildHomepageCandidates(rows, companyName) {
       }
     }
   }
-
   return uniqBy(out.sort((a, b) => b.score - a.score), (x) => x.url).slice(0, 10);
 }
 
 function buildInstagramCandidates(rows, companyName) {
   const out = [];
-
   for (const row of rows || []) {
     const query = s(row?.query);
     const items = Array.isArray(row?.data?.items) ? row.data.items : [];
-
     for (const item of items) {
       const title = stripHtml(item?.title);
       const snippet = stripHtml(item?.description);
@@ -590,7 +566,6 @@ function buildInstagramCandidates(rows, companyName) {
       }
     }
   }
-
   return uniqBy(out.sort((a, b) => b.score - a.score), (x) => x.url).slice(0, 10);
 }
 
@@ -607,7 +582,6 @@ function buildYoutubeCandidates(searchRows, channelsRes, companyName) {
 
   for (const row of searchRows || []) {
     const items = Array.isArray(row?.data?.items) ? row.data.items : [];
-
     for (const item of items) {
       const channelId = s(item?.id?.channelId || item?.snippet?.channelId);
       if (!channelId) continue;
@@ -625,7 +599,6 @@ function buildYoutubeCandidates(searchRows, channelsRes, companyName) {
 
       let score = 10;
       const joined = `${title} ${desc} ${customUrl}`.toLowerCase();
-
       if (joined.includes(company)) score += 25;
       if (joined.includes("official") || joined.includes("공식")) score += 10;
 
@@ -635,7 +608,6 @@ function buildYoutubeCandidates(searchRows, channelsRes, companyName) {
 
       if (subs >= 100000) score += 8;
       else if (subs >= 10000) score += 5;
-
       if (videos >= 20) score += 4;
       if (views >= 1000000) score += 4;
 
@@ -665,7 +637,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       ok: true,
       message: "analyze route works",
-      mode: "youtube-stage-4",
+      mode: "pagespeed-stage-5",
     });
   }
 
@@ -679,7 +651,6 @@ export default async function handler(req, res) {
 
   try {
     const body = req.body || {};
-
     const input = {
       companyName: s(body.companyName),
       industry: s(body.industry),
@@ -700,10 +671,12 @@ export default async function handler(req, res) {
     const NAVER_CLIENT_ID = process.env.NAVER_CLIENT_ID || "";
     const NAVER_CLIENT_SECRET = process.env.NAVER_CLIENT_SECRET || "";
     const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || "";
+    const PAGESPEED_API_KEY = process.env.PAGESPEED_API_KEY || "";
 
     response.debug.env.naverClientId = !!NAVER_CLIENT_ID;
     response.debug.env.naverClientSecret = !!NAVER_CLIENT_SECRET;
     response.debug.env.youtubeApiKey = !!YOUTUBE_API_KEY;
+    response.debug.env.pageSpeedApiKey = !!PAGESPEED_API_KEY;
 
     const blogQueries = uniqBy(
       [input.companyName, [input.companyName, input.industry].filter(Boolean).join(" ")].filter(Boolean),
@@ -732,7 +705,10 @@ export default async function handler(req, res) {
     response.debug.queries.instagram = instagramQueries;
     response.debug.queries.youtube = youtubeQueries;
 
-    if (!NAVER_CLIENT_ID || !NAVER_CLIENT_SECRET) {
+    const naverReady = !!NAVER_CLIENT_ID && !!NAVER_CLIENT_SECRET;
+    const ytReady = !!YOUTUBE_API_KEY;
+
+    if (!naverReady) {
       response.discovery.sourceStatus.naverBlog.error = "NAVER_CLIENT_ID or NAVER_CLIENT_SECRET missing";
       response.discovery.sourceStatus.naverBlog.errorCount = 1;
       response.discovery.sourceStatus.naverShopping.error = "NAVER_CLIENT_ID or NAVER_CLIENT_SECRET missing";
@@ -743,25 +719,22 @@ export default async function handler(req, res) {
       response.discovery.sourceStatus.naverWebInstagram.errorCount = 1;
     }
 
-    if (!YOUTUBE_API_KEY) {
+    if (!ytReady) {
       response.discovery.sourceStatus.youtube.error = "YOUTUBE_API_KEY missing";
       response.discovery.sourceStatus.youtube.errorCount = 1;
     }
-
-    const headers =
-      NAVER_CLIENT_ID && NAVER_CLIENT_SECRET
-        ? {
-            "X-Naver-Client-Id": NAVER_CLIENT_ID,
-            "X-Naver-Client-Secret": NAVER_CLIENT_SECRET,
-          }
-        : null;
 
     let blogRows = [];
     let shoppingRows = [];
     let homepageRows = [];
     let instagramRows = [];
 
-    if (headers) {
+    if (naverReady) {
+      const headers = {
+        "X-Naver-Client-Id": NAVER_CLIENT_ID,
+        "X-Naver-Client-Secret": NAVER_CLIENT_SECRET,
+      };
+
       blogRows = await runNaverBatch({
         endpoint: NAVER_BLOG_API,
         queries: blogQueries,
@@ -812,7 +785,7 @@ export default async function handler(req, res) {
     let youtubeChannelsRes = { ok: true, status: 200, data: { items: [] }, error: null };
     let youtubeCandidates = [];
 
-    if (YOUTUBE_API_KEY) {
+    if (ytReady) {
       youtubeSearchRows = await runYoutubeSearchBatch({
         queries: youtubeQueries,
         apiKey: YOUTUBE_API_KEY,
@@ -879,7 +852,7 @@ export default async function handler(req, res) {
         verified: false,
         confidence: selectedHomepage.confidence,
         source: selectedHomepage.source,
-        reason: "stage 4 homepage candidate",
+        reason: "stage 5 homepage candidate",
         score: selectedHomepage.score,
         candidateCount: homepageCandidates.length,
         url: selectedHomepage.url,
@@ -904,7 +877,7 @@ export default async function handler(req, res) {
         verified: false,
         confidence: selectedInstagram.confidence,
         source: selectedInstagram.source,
-        reason: "stage 4 instagram candidate",
+        reason: "stage 5 instagram candidate",
         score: selectedInstagram.score,
         candidateCount: instagramCandidates.length,
         url: selectedInstagram.url,
@@ -933,7 +906,7 @@ export default async function handler(req, res) {
         verified: false,
         confidence: selectedYoutube.confidence,
         source: selectedYoutube.source,
-        reason: "stage 4 youtube candidate",
+        reason: "stage 5 youtube candidate",
         score: selectedYoutube.score,
         candidateCount: youtubeCandidates.length,
         url: selectedYoutube.url,
@@ -941,6 +914,52 @@ export default async function handler(req, res) {
       };
     } else {
       response.discovery.verified.youtube.reason = "youtube candidate not found";
+    }
+
+    const psiRes = await fetchPageSpeed(response.discovery.assets.homepage, PAGESPEED_API_KEY, response.debug);
+
+    if (psiRes.ok && psiRes.data) {
+      const categories = psiRes.data?.lighthouseResult?.categories || {};
+      const audits = psiRes.data?.lighthouseResult?.audits || {};
+
+      response.discovery.pageSpeed = {
+        ok: true,
+        performanceScore: Math.round(n(categories?.performance?.score) * 100),
+        accessibilityScore: Math.round(n(categories?.accessibility?.score) * 100),
+        bestPracticesScore: Math.round(n(categories?.["best-practices"]?.score) * 100),
+        seoScore: Math.round(n(categories?.seo?.score) * 100),
+        firstContentfulPaint: s(audits?.["first-contentful-paint"]?.displayValue),
+        largestContentfulPaint: s(audits?.["largest-contentful-paint"]?.displayValue),
+        speedIndex: s(audits?.["speed-index"]?.displayValue),
+      };
+
+      response.discovery.sourceStatus.pageSpeed = {
+        fetchOk: true,
+        parseOk: true,
+        candidateFound: true,
+        verified: false,
+        total: 1,
+        rawItems: 1,
+        status: psiRes.status,
+        error: null,
+        errorCount: 0,
+      };
+    } else {
+      response.discovery.pageSpeed = {
+        ok: false,
+        error: psiRes.error || "pagespeed failed",
+      };
+      response.discovery.sourceStatus.pageSpeed = {
+        fetchOk: false,
+        parseOk: false,
+        candidateFound: !!response.discovery.assets.homepage,
+        verified: false,
+        total: 0,
+        rawItems: 0,
+        status: psiRes.status || null,
+        error: psiRes.error || "pagespeed failed",
+        errorCount: 1,
+      };
     }
 
     response.discovery.counts.assetCount = [
@@ -959,24 +978,25 @@ export default async function handler(req, res) {
     const hasHomepage = homepageCandidates.length > 0;
     const hasInstagram = instagramCandidates.length > 0;
     const hasYoutube = youtubeCandidates.length > 0;
+    const hasPageSpeed = response.discovery.pageSpeed.ok;
 
     response.diagnosis.confidence =
-      hasHomepage || hasInstagram || hasYoutube || hasBlog || hasShopping
+      hasHomepage || hasInstagram || hasYoutube || hasPageSpeed || hasBlog || hasShopping
         ? "보통"
         : "낮음";
 
     response.diagnosis.confidenceDescription =
-      hasYoutube
-        ? "YouTube 후보까지 포함해 NAVER/YouTube 결과가 수집되었습니다."
-        : "JSON은 정상이나 YouTube 후보가 부족하거나 일부 요청이 실패했습니다.";
+      hasPageSpeed
+        ? "PageSpeed까지 포함해 NAVER/YouTube 결과가 수집되었습니다."
+        : "JSON은 정상이나 homepage 후보가 없거나 PageSpeed 실행이 되지 않았습니다.";
 
     response.diagnosis.executiveSummary =
-      hasYoutube
-        ? `${input.companyName} 관련 NAVER 결과와 YouTube 채널 후보가 수집되었습니다.`
-        : `${input.companyName} 관련 NAVER 결과는 일부 수집되었으나 YouTube 후보는 부족합니다.`;
+      hasPageSpeed
+        ? `${input.companyName} 관련 NAVER/YouTube 후보와 PageSpeed 결과가 수집되었습니다.`
+        : `${input.companyName} 관련 NAVER/YouTube 후보는 일부 수집되었으나 PageSpeed는 아직 실행되지 않았습니다.`;
 
     response.diagnosis.scores = {
-      overall: hasYoutube ? 40 : 30,
+      overall: hasPageSpeed ? 48 : hasYoutube ? 40 : 30,
       searchVisibility:
         (hasBlog ? 12 : 0) +
         (hasShopping ? 12 : 0) +
@@ -985,7 +1005,11 @@ export default async function handler(req, res) {
         (hasYoutube ? 12 : 0),
       contentPresence: hasYoutube ? 20 : 0,
       localExposure: response.discovery.counts.regionHits > 0 ? 12 : 0,
-      webQuality: hasHomepage ? 10 : 0,
+      webQuality: hasPageSpeed
+        ? n(response.discovery.pageSpeed.performanceScore)
+        : hasHomepage
+          ? 10
+          : 0,
     };
 
     response.diagnosis.wins = [];
@@ -994,16 +1018,17 @@ export default async function handler(req, res) {
     if (hasHomepage) response.diagnosis.wins.push("NAVER WebKR에서 homepage 후보가 수집되고 있습니다.");
     if (hasInstagram) response.diagnosis.wins.push("NAVER WebKR에서 instagram 후보가 수집되고 있습니다.");
     if (hasYoutube) response.diagnosis.wins.push("YouTube 채널 후보가 수집되고 있습니다.");
+    if (hasPageSpeed) response.diagnosis.wins.push("homepage 후보에 대해 PageSpeed가 실행되었습니다.");
 
     response.diagnosis.risks = [
       "현재 homepage/instagram/youtube는 후보 단계이며 아직 공식성 검증은 하지 않습니다.",
-      "PageSpeed와 지도 자산은 아직 연결되지 않았습니다.",
+      "지도 자산과 고급 점수 엔진은 아직 연결되지 않았습니다.",
     ];
 
     response.diagnosis.nextActions = [
-      "이 단계가 정상이면 다음으로 PageSpeed를 붙이세요.",
-      "프론트에서 discovery.assets.youtube 값이 들어오는지 확인하세요.",
-      "debug.candidates.youtube 상위 후보가 기대한 채널인지 확인하세요.",
+      "프론트에서 discovery.pageSpeed 값이 들어오는지 확인하세요.",
+      "sourceStatus.pageSpeed.status, error 값을 확인하세요.",
+      "homepage 후보가 잘못 잡히면 debug.candidates.homepage 상위 후보를 먼저 조정하세요.",
     ];
 
     return res.status(200).json(response);
