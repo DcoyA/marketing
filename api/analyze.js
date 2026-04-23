@@ -1,6 +1,7 @@
 const ENV = {
   NAVER_CLIENT_ID: process.env.NAVER_CLIENT_ID || "",
-  NAVER_CLIENT_SECRET: process.env.NAVER_CLIENT_SECRET || ""
+  NAVER_CLIENT_SECRET: process.env.NAVER_CLIENT_SECRET || "",
+  YOUTUBE_API_KEY: process.env.YOUTUBE_API_KEY || ""
 };
 
 const JSON_HEADERS = {
@@ -270,7 +271,12 @@ function buildQueries(input) {
       `${company} 공식`,
       `${company} 브랜드`,
       industry ? `${company} ${industry}` : ""
-    ]).slice(0, 4)
+    ]).slice(0, 4),
+    youtube: unique([
+      company,
+      `${company} official`,
+      `${company} korea`
+    ]).slice(0, 3)
   };
 }
 
@@ -407,6 +413,99 @@ async function searchNaverShopping(input) {
   };
 }
 
+async function searchYouTube(input) {
+  if (!ENV.YOUTUBE_API_KEY) {
+    return { ok: false, items: [], best: null, error: "YOUTUBE_API_KEY missing" };
+  }
+
+  const query = buildQueries(input).youtube[0] || input.companyName;
+
+  const searchUrl =
+    `https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&maxResults=7` +
+    `&q=${encodeURIComponent(query)}&key=${encodeURIComponent(ENV.YOUTUBE_API_KEY)}`;
+
+  const searchRes = await fetchJson(searchUrl);
+
+  if (!searchRes.ok) {
+    return {
+      ok: false,
+      items: [],
+      best: null,
+      status: searchRes.status,
+      error: searchRes.text || "YouTube search failed"
+    };
+  }
+
+  const searchItems = Array.isArray(searchRes.data?.items) ? searchRes.data.items : [];
+  const channelIds = unique(
+    searchItems
+      .map((item) => item?.snippet?.channelId || item?.id?.channelId)
+      .filter(Boolean)
+  );
+
+  if (!channelIds.length) {
+    return {
+      ok: true,
+      items: [],
+      best: null
+    };
+  }
+
+  const detailUrl =
+    `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${encodeURIComponent(channelIds.join(","))}` +
+    `&key=${encodeURIComponent(ENV.YOUTUBE_API_KEY)}`;
+
+  const detailRes = await fetchJson(detailUrl);
+
+  if (!detailRes.ok) {
+    return {
+      ok: false,
+      items: [],
+      best: null,
+      status: detailRes.status,
+      error: detailRes.text || "YouTube channels failed"
+    };
+  }
+
+  const channels = Array.isArray(detailRes.data?.items) ? detailRes.data.items : [];
+
+  const items = channels.map((ch) => {
+    const title = ch?.snippet?.title || "";
+    const description = ch?.snippet?.description || "";
+    const channelId = ch?.id || "";
+    const subscribers = Number(ch?.statistics?.subscriberCount || 0);
+    const videoCount = Number(ch?.statistics?.videoCount || 0);
+    const viewCount = Number(ch?.statistics?.viewCount || 0);
+
+    let score = 0;
+    score += scoreNameMatch(input.companyName, title, description);
+    if (/official|공식|오피셜|브랜드/i.test(`${title} ${description}`)) score += 12;
+    score += clamp(Math.log10(subscribers + 1) * 6, 0, 18);
+    score += clamp(Math.log10(videoCount + 1) * 4, 0, 12);
+
+    return {
+      source: "youtube",
+      title,
+      url: `https://www.youtube.com/channel/${channelId}`,
+      channelId,
+      snippet: description,
+      subscribers,
+      videoCount,
+      viewCount,
+      score: round(score),
+      confidence:
+        score >= 80 ? "high" :
+        score >= 55 ? "medium" : "low"
+    };
+  }).sort((a, b) => b.score - a.score);
+
+  return {
+    ok: true,
+    items,
+    best: items[0] || null
+  };
+}
+
 function pickNaverStore(input, shoppingItems = []) {
   const scored = shoppingItems
     .map((item) => {
@@ -492,7 +591,7 @@ function countRegionSignals(region, items = []) {
   }).length;
 }
 
-function buildEvidence(input, blog, shopping) {
+function buildEvidence(input, blog, shopping, youtube) {
   const evidence = [];
 
   (blog.items || []).slice(0, 6).forEach((item) => {
@@ -543,6 +642,22 @@ function buildEvidence(input, blog, shopping) {
     });
   });
 
+  if (youtube?.best) {
+    evidence.push({
+      type: "youtube-channel",
+      source: youtube.best.source,
+      title: youtube.best.title,
+      url: youtube.best.url,
+      snippet: youtube.best.snippet,
+      score: youtube.best.score,
+      meta: {
+        subscribers: youtube.best.subscribers,
+        videoCount: youtube.best.videoCount,
+        viewCount: youtube.best.viewCount
+      }
+    });
+  }
+
   return evidence
     .sort((a, b) => (b.score || 0) - (a.score || 0))
     .slice(0, 16);
@@ -561,6 +676,7 @@ function computeScores(profile, discovery, evidence) {
 
   const homepage = discovery.assetDetails.homepage;
   const naverStore = discovery.assetDetails.naverStore;
+  const youtube = discovery.assetDetails.youtube;
 
   let searchVisibility =
     16 +
@@ -570,9 +686,11 @@ function computeScores(profile, discovery, evidence) {
     (naverStore ? 14 : 0);
 
   let contentPresence =
-    12 +
-    clamp(evidence.filter((e) => e.type === "blog-mention").length * 8, 0, 36) +
-    clamp(evidence.filter((e) => e.type === "shopping-item").length * 5, 0, 30);
+    10 +
+    clamp(evidence.filter((e) => e.type === "blog-mention").length * 7, 0, 28) +
+    clamp(evidence.filter((e) => e.type === "shopping-item").length * 4, 0, 22) +
+    (youtube ? 24 : 0) +
+    clamp(youtube?.subscribers ? Math.log10(youtube.subscribers + 1) * 8 : 0, 0, 18);
 
   let localExposure =
     profile.localBusiness
@@ -596,9 +714,9 @@ function computeScores(profile, discovery, evidence) {
   webQuality = round(clamp(webQuality, 0, 100));
 
   const overall = round(clamp(
-    searchVisibility * 0.35 +
-    contentPresence * 0.25 +
-    localExposure * 0.22 +
+    searchVisibility * 0.31 +
+    contentPresence * 0.30 +
+    localExposure * 0.21 +
     webQuality * 0.18,
     0,
     100
@@ -617,10 +735,10 @@ function computeConfidence(discovery, evidence) {
   const assetCount = discovery.counts.assetCount;
   const strongEvidence = evidence.filter((e) => (e.score || 0) >= 60).length;
 
-  if (assetCount >= 2 || strongEvidence >= 5) {
+  if (assetCount >= 3 || strongEvidence >= 5) {
     return {
       level: "높음",
-      description: "NAVER 기준으로 자산과 반복 언급 흔적이 확인되어 1차 진단 신뢰도가 높은 편입니다."
+      description: "NAVER와 YouTube 기준으로 자산 및 언급 흔적이 복수 확인되어 1차 진단 신뢰도가 높은 편입니다."
     };
   }
 
@@ -662,6 +780,10 @@ function determineStage(profile, scores, discovery) {
   };
 }
 
+function blogEvidenceCount(evidence = []) {
+  return evidence.filter((e) => e.type === "blog-mention").length;
+}
+
 function buildNarrative(input, profile, discovery, scores, evidence, confidence) {
   const wins = [];
   const risks = [];
@@ -671,12 +793,20 @@ function buildNarrative(input, profile, discovery, scores, evidence, confidence)
     wins.push("NAVER 쇼핑/스토어 계열 노출 흔적이 확인되어 검색-구매 접점은 일부 확보된 상태입니다.");
   }
 
-  if ((blogEvidenceCount(evidence) >= 3)) {
+  if (discovery.assetDetails.youtube) {
+    wins.push("YouTube 채널 후보가 확인되어 콘텐츠 자산 기반의 확장 가능성이 있습니다.");
+  }
+
+  if (blogEvidenceCount(evidence) >= 3) {
     wins.push("네이버 블로그 언급이 반복적으로 발견되어 브랜드 언급 기반은 형성되어 있습니다.");
   }
 
   if (!discovery.assetDetails.homepage) {
     risks.push("공식 홈페이지 또는 대표 랜딩이 확정되지 않아 브랜드 검색 유입이 외부 플랫폼에 분산될 수 있습니다.");
+  }
+
+  if (!discovery.assetDetails.youtube) {
+    risks.push("유튜브 채널 자산이 약하면 영상 기반 신뢰 축적과 리타겟팅용 크리에이티브 자산이 부족해질 수 있습니다.");
   }
 
   if (profile.type === "ecommerce" && !discovery.assetDetails.naverStore) {
@@ -691,34 +821,33 @@ function buildNarrative(input, profile, discovery, scores, evidence, confidence)
     nextActions.push("브랜드 검색 시 가장 먼저 연결될 공식 홈페이지 또는 대표 랜딩 1개를 우선 확정하세요.");
   }
 
+  if (!discovery.assetDetails.youtube) {
+    nextActions.push("브랜드명과 일치하는 YouTube 채널 운영 여부를 정리하고, 첫 4주 동안 주 1회라도 업로드 루틴을 만드세요.");
+  }
+
   if (profile.type === "ecommerce") {
     nextActions.push("대표 상품 10개를 기준으로 NAVER 쇼핑 상품명·썸네일·리뷰 구조를 먼저 정비하세요.");
     nextActions.push("첫 4주 동안 블로그 콘텐츠는 주 2회, 후기형 1개 + 문제해결형 1개 패턴으로 운영하세요.");
   } else if (profile.localBusiness) {
     nextActions.push("지역명 + 업종 + 대표 서비스 조합으로 블로그/소개 문구를 통일해 지역 검색 접점을 강화하세요.");
-    nextActions.push("첫 4주 동안 후기형/FAQ형 블로그 콘텐츠를 주 2회 운영해 신뢰 자산을 축적하세요.");
+    nextActions.push("첫 4주 동안 블로그 콘텐츠를 주 2회, FAQ형 1개 + 후기형 1개 패턴으로 운영하세요.");
   } else {
     nextActions.push("브랜드 소개보다 고객 문제 해결형 콘텐츠를 주 2회 발행해 검색 기반 콘텐츠를 축적하세요.");
-    nextActions.push("검색 후 바로 이동할 대표 전환 페이지를 하나 정하고 CTA를 단일화하세요.");
   }
 
   const executiveSummary =
     profile.type === "ecommerce"
-      ? `${input.companyName}은(는) NAVER 기준으로 일부 검색 흔적은 있으나, 공식 랜딩과 쇼핑 전환 접점을 더 구조화해야 매출형 마케팅 효율이 올라갈 단계입니다.`
+      ? `${input.companyName}은(는) NAVER·YouTube 기준 일부 검색/콘텐츠 신호가 있으나, 공식 랜딩과 쇼핑 전환 접점을 더 구조화해야 매출형 마케팅 효율이 올라갈 단계입니다.`
       : profile.localBusiness
-        ? `${input.companyName}은(는) 지역 기반 검색과 블로그 언급 신호를 활용할 여지가 있으며, 지금은 방문 결정에 필요한 신뢰 자산을 더 쌓아야 하는 단계입니다.`
-        : `${input.companyName}은(는) NAVER 기준 초기 언급 신호는 있으나 공식 자산과 전환 구조가 아직 약하게 보일 수 있습니다.`;
+        ? `${input.companyName}은(는) 지역 기반 검색과 콘텐츠 신호를 활용할 여지가 있으며, 지금은 방문 결정에 필요한 신뢰 자산을 더 쌓아야 하는 단계입니다.`
+        : `${input.companyName}은(는) NAVER·YouTube 기준 초기 자산 흔적은 있으나 공식 자산과 전환 구조가 아직 약하게 보일 수 있습니다.`;
 
   return {
     executiveSummary,
     wins: unique(wins).slice(0, 3),
-    risks: unique(risks).slice(0, 3),
+    risks: unique(risks).slice(0, 4),
     nextActions: unique(nextActions).slice(0, 4)
   };
-}
-
-function blogEvidenceCount(evidence = []) {
-  return evidence.filter((e) => e.type === "blog-mention").length;
 }
 
 function buildPrescription(profile, stage, discovery) {
@@ -728,6 +857,7 @@ function buildPrescription(profile, stage, discovery) {
       priorityChannels: [
         "NAVER Shopping",
         "브랜드 랜딩페이지",
+        "YouTube/콘텐츠 자산",
         "블로그 콘텐츠"
       ],
       thirtyDayPlan: [
@@ -743,8 +873,8 @@ function buildPrescription(profile, stage, discovery) {
         },
         {
           week: "2~4주차",
-          action: "주 2회 블로그 운영",
-          detail: "후기형 1개 + 문제해결형 1개 패턴으로 4주 지속"
+          action: "콘텐츠 운영 시작",
+          detail: "블로그 주 2회 + YouTube 주 1회(또는 Shorts 2개) 패턴으로 4주 지속"
         }
       ],
       ninetyDayPlan: [
@@ -755,13 +885,13 @@ function buildPrescription(profile, stage, discovery) {
         },
         {
           period: "5~8주",
-          focus: "콘텐츠 반복 운영",
-          deliverables: ["블로그 8개 이상", "베스트 상품 중심 노출 강화"]
+          focus: "콘텐츠 루틴 정착",
+          deliverables: ["블로그 8개 이상", "Shorts/영상 4개 이상", "베스트 상품 노출 강화"]
         },
         {
           period: "9~12주",
-          focus: "광고/리타겟팅 테스트 준비",
-          deliverables: ["전환 측정 구조", "상위 랜딩 확정"]
+          focus: "광고/리타겟팅 준비",
+          deliverables: ["전환 측정 구조", "영상/배너 크리에이티브 자산 확보"]
         }
       ]
     };
@@ -773,13 +903,14 @@ function buildPrescription(profile, stage, discovery) {
       priorityChannels: [
         "지역 검색",
         "블로그 후기/FAQ",
+        "YouTube/Shorts",
         "대표 랜딩 또는 소개 페이지"
       ],
       thirtyDayPlan: [
         {
           week: "1주차",
           action: "지역명 + 업종 + 대표 서비스 조합의 핵심 문구 정리",
-          detail: "모든 소개 문구와 콘텐츠 제목 톤을 통일"
+          detail: "소개 문구와 콘텐츠 제목 톤을 통일"
         },
         {
           week: "1~2주차",
@@ -788,8 +919,8 @@ function buildPrescription(profile, stage, discovery) {
         },
         {
           week: "3~4주차",
-          action: "상담/문의/예약으로 이어질 대표 페이지 정비",
-          detail: "CTA를 1개로 단순화"
+          action: "짧은 영상/Shorts 업로드 시작",
+          detail: "매장·서비스 현장형 15~30초 포맷을 주 1회 이상"
         }
       ],
       ninetyDayPlan: [
@@ -801,12 +932,12 @@ function buildPrescription(profile, stage, discovery) {
         {
           period: "5~8주",
           focus: "후기/사례 축적",
-          deliverables: ["반복 후기 콘텐츠", "FAQ 아카이브"]
+          deliverables: ["반복 후기 콘텐츠", "FAQ 아카이브", "Shorts 누적"]
         },
         {
           period: "9~12주",
           focus: "지역 광고 테스트 준비",
-          deliverables: ["상담/예약 전환 기준선 확보"]
+          deliverables: ["상담/예약 전환 기준선 확보", "영상 자산 확보"]
         }
       ]
     };
@@ -817,6 +948,7 @@ function buildPrescription(profile, stage, discovery) {
     priorityChannels: [
       "대표 랜딩",
       "블로그 콘텐츠",
+      "YouTube/Shorts",
       "브랜드 검색 접점"
     ],
     thirtyDayPlan: [
@@ -827,7 +959,7 @@ function buildPrescription(profile, stage, discovery) {
       },
       {
         week: "2~4주차",
-        action: "주 2회 블로그 운영",
+        action: "블로그 주 2회 + YouTube 주 1회 운영 시작",
         detail: "문제해결형 또는 소개형 콘텐츠를 반복 축적"
       }
     ],
@@ -835,7 +967,7 @@ function buildPrescription(profile, stage, discovery) {
       {
         period: "1~4주",
         focus: "기초 자산 정비",
-        deliverables: ["대표 페이지", "블로그 4개 이상"]
+        deliverables: ["대표 페이지", "블로그 4개 이상", "영상 4개 이상"]
       },
       {
         period: "5~8주",
@@ -845,7 +977,7 @@ function buildPrescription(profile, stage, discovery) {
       {
         period: "9~12주",
         focus: "광고/확장 채널 검토",
-        deliverables: ["기초 KPI 기준선 확보"]
+        deliverables: ["기초 KPI 기준선 확보", "영상 자산 라이브러리 구축"]
       }
     ]
   };
@@ -862,7 +994,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       ok: true,
       message: "analyze route works",
-      mode: "naver-stage-1"
+      mode: "naver-youtube-stage-2"
     });
   }
 
@@ -899,18 +1031,31 @@ export default async function handler(req, res) {
 
     const profile = buildBusinessProfile(input);
 
-    const [blog, shopping] = await Promise.all([
+    const [blog, shopping, youtube] = await Promise.all([
       searchNaverBlog(input),
-      searchNaverShopping(input)
+      searchNaverShopping(input),
+      searchYouTube(input)
     ]);
 
     const homepage = inferHomepageFromShopping(input, shopping.items || []);
     const naverStore = pickNaverStore(input, shopping.items || []);
+    const youtubeAsset = youtube.best
+      ? {
+          title: youtube.best.title,
+          url: youtube.best.url,
+          source: "youtube",
+          confidence: youtube.best.confidence,
+          snippet: youtube.best.snippet,
+          subscribers: youtube.best.subscribers,
+          videoCount: youtube.best.videoCount,
+          viewCount: youtube.best.viewCount
+        }
+      : null;
 
     const assetDetails = {
       homepage,
       instagram: null,
-      youtube: null,
+      youtube: youtubeAsset,
       naverStore,
       map: null
     };
@@ -919,7 +1064,7 @@ export default async function handler(req, res) {
       assets: {
         homepage: homepage?.url || null,
         instagram: null,
-        youtube: null,
+        youtube: youtubeAsset?.url || null,
         naverStore: naverStore?.url || null,
         map: null
       },
@@ -946,9 +1091,9 @@ export default async function handler(req, res) {
           errorCount: (shopping.errors || []).length
         },
         youtube: {
-          ok: false,
-          candidateCount: 0,
-          error: "stage-1 not connected"
+          ok: youtube.ok,
+          candidateCount: (youtube.items || []).length,
+          error: youtube.error || null
         },
         pageSpeed: {
           ok: false
@@ -956,7 +1101,7 @@ export default async function handler(req, res) {
       }
     };
 
-    const evidence = buildEvidence(input, blog, shopping);
+    const evidence = buildEvidence(input, blog, shopping, youtube);
     const scores = computeScores(profile, discovery, evidence);
     const confidence = computeConfidence(discovery, evidence);
     const stage = determineStage(profile, scores, discovery);
@@ -973,9 +1118,9 @@ export default async function handler(req, res) {
       risks: narrative.risks,
       nextActions: narrative.nextActions,
       limits: [
-        "현재는 1단계 NAVER Blog + NAVER Shopping 기반 진단입니다.",
-        "Instagram / YouTube / PageSpeed / 지도 자산은 아직 연결되지 않았습니다.",
-        "2단계에서 YouTube, 3단계에서 PageSpeed를 추가하면 진단 정밀도가 올라갑니다."
+        "현재는 2단계 NAVER Blog + NAVER Shopping + YouTube 기반 진단입니다.",
+        "Instagram / PageSpeed / 지도 자산은 아직 연결되지 않았습니다.",
+        "3단계에서 PageSpeed를 추가하면 홈페이지 품질 신호까지 반영할 수 있습니다."
       ]
     };
 
