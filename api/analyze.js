@@ -882,7 +882,7 @@ export default async function handler(req, res) {
       };
     }
 
-    return res.status(200).json({
+        const responsePayload = {
       ok: true,
       input: { companyName, industry, region, email },
       discovery,
@@ -918,6 +918,42 @@ export default async function handler(req, res) {
           model: !!aiStrategy ? (env("GEMINI_MODEL") || "gemini-2.5-flash") : null,
         },
       },
+    };
+
+    const sheetSaveResult = await saveDiagnosisToSheet({
+      request_date: requestDate,
+      ip_hash: ipHash,
+      company_name: companyName,
+      industry,
+      region,
+      email,
+      overall_score: score.overall,
+      confidence: diagnosis.confidence,
+      homepage: discovery?.assets?.homepage || "",
+      instagram: discovery?.assets?.instagram || "",
+      youtube: discovery?.assets?.youtube || "",
+      naver_store: discovery?.assets?.naverStore || "",
+      pagespeed_ok: !!pageSpeed?.ok,
+      pagespeed_error: pageSpeed?.error || "",
+      raw_count_blog: rawCount?.naverBlog || 0,
+      raw_count_shopping: rawCount?.naverShopping || 0,
+      raw_count_web_homepage: rawCount?.naverWebHomepage || 0,
+      raw_count_web_instagram: rawCount?.naverWebInstagram || 0,
+      raw_count_youtube: rawCount?.youtube || 0,
+      executive_summary: diagnosis?.executiveSummary || "",
+      full_response_json: responsePayload,
+    });
+
+    responsePayload.debug.storage = {
+      enabled: !!APP_SCRIPT_URL,
+      rateLimitChecked: true,
+      limitCheckOk: !!limitCheck?.ok,
+      saveOk: !!sheetSaveResult?.ok,
+      rowNumber: sheetSaveResult?.rowNumber || null,
+    };
+
+    return res.status(200).json(responsePayload);
+
     });
   } catch (e) {
     return res.status(500).json({
