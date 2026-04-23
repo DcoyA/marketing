@@ -808,6 +808,11 @@ if (storePick.chosen && /^\/main\/products\//i.test(pathOf(storePick.chosen.url)
           youtube: !!youtubeKey,
           pageSpeed: !!pageSpeedKey,
         },
+        ai: {
+          used: !!aiStrategy,
+          model: !!aiStrategy ? (env("OPENAI_MODEL") || "gpt-4.1-mini") : null
+        },
+
       },
     });
   } catch (e) {
