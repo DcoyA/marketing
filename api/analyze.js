@@ -699,7 +699,7 @@ if (storePick.chosen && /^\/main\/products\//i.test(pathOf(storePick.chosen.url)
       rawCount,
     };
 
-    const diagnosis = {
+        let diagnosis = {
       confidence: scoreToConfidence(score.overall),
       score,
       executiveSummary:
@@ -725,21 +725,16 @@ if (storePick.chosen && /^\/main\/products\//i.test(pathOf(storePick.chosen.url)
         "NAVER Shopping 노출/브랜드스토어 정비",
         "홈페이지 확인 후 PageSpeed 재측정",
       ],
+      limits: [
+        "현재 답변은 룰 기반 요약이며 상세 전략·예산은 보수적으로 해석해야 합니다."
+      ]
     };
 
-    const prescription = {
+    let prescription = {
       stage: { code: "6-step-compact", name: "점수·신뢰도·후보 선별 정리본" },
-      plan30d: [
-        "1주차: 공식 URL/소셜 핸들 정합성 통일",
-        "2주차: NAVER 검색 방어 콘텐츠 및 브랜드 키워드 보강",
-        "3주차: 쇼핑/스토어 공식성 신호 강화",
-        "4주차: 클릭률·브랜드검색량·전환율 추적",
-      ],
-      plan90d: [
-        "공식 자산 반복 노출",
-        "브랜드 일치형 채널 구조 고정",
-        "콘텐츠/SEO/쇼핑 성과 확대",
-      ],
+      priorities: [],
+      budgetSummary: null,
+      assumptions: [],
       kpi: [
         "브랜드 검색량",
         "공식 랜딩 CTR",
@@ -748,6 +743,40 @@ if (storePick.chosen && /^\/main\/products\//i.test(pathOf(storePick.chosen.url)
         "NAVER Shopping 유입/전환",
       ],
     };
+
+    const aiStrategy = await generateStrategicDiagnosisLLM({
+      companyName,
+      industry,
+      region,
+      discovery,
+      score,
+      evidence,
+    });
+
+    if (aiStrategy) {
+      diagnosis = {
+        ...diagnosis,
+        executiveSummary: aiStrategy.executiveSummary || diagnosis.executiveSummary,
+        wins: Array.isArray(aiStrategy.wins) && aiStrategy.wins.length ? aiStrategy.wins : diagnosis.wins,
+        risks: Array.isArray(aiStrategy.risks) && aiStrategy.risks.length ? aiStrategy.risks : diagnosis.risks,
+        nextActions: Array.isArray(aiStrategy.nextActions) && aiStrategy.nextActions.length ? aiStrategy.nextActions : diagnosis.nextActions,
+        limits: Array.isArray(aiStrategy.limits) && aiStrategy.limits.length ? aiStrategy.limits : diagnosis.limits,
+      };
+
+      prescription = {
+        stage: {
+          code: "llm-strategic-analysis",
+          name: "LLM 재분석 기반 마케팅 전략"
+        },
+        priorities: Array.isArray(aiStrategy.priorities) ? aiStrategy.priorities : [],
+        budgetSummary: null,
+        assumptions: Array.isArray(aiStrategy.limits) ? aiStrategy.limits : [],
+        kpi: Array.isArray(aiStrategy.priorities)
+          ? Array.from(new Set(aiStrategy.priorities.flatMap(x => Array.isArray(x.kpis) ? x.kpis : []))).slice(0, 12)
+          : prescription.kpi
+      };
+    }
+
 
     return res.status(200).json({
       ok: true,
