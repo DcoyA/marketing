@@ -14,6 +14,7 @@ const PAGESPEED_API = "https://www.googleapis.com/pagespeedonline/v5/runPagespee
 
 const DEFAULT_TIMEOUT_MS = 12000;
 const NAVER_QUERY_DELAY_MS = 220;
+const YOUTUBE_QUERY_DELAY_MS = 150;
 
 const SOCIAL_DOMAINS = [
   "instagram.com",
@@ -103,7 +104,6 @@ const ALIAS_STRIP_WORDS = [
   "store",
   "brand",
   "global",
-  "kurlymall",
 ];
 
 function env(name, fallback = "") {
@@ -207,14 +207,6 @@ function cleanTrailingSlash(inputUrl = "") {
   return inputUrl.replace(/\/+$/, "");
 }
 
-function isSocialDomain(domain = "") {
-  return SOCIAL_DOMAINS.some((d) => domain === d || domain.endsWith(`.${d}`));
-}
-
-function isNoisyWebDomain(domain = "") {
-  return NOISY_WEB_DOMAINS.some((d) => domain === d || domain.endsWith(`.${d}`));
-}
-
 function containsAny(text = "", keywords = []) {
   const t = normalizeText(text);
   return keywords.some((kw) => t.includes(normalizeText(kw)));
@@ -227,6 +219,14 @@ function countContains(text = "", keywords = []) {
     if (t.includes(normalizeText(kw))) count += 1;
   }
   return count;
+}
+
+function isSocialDomain(domain = "") {
+  return SOCIAL_DOMAINS.some((d) => domain === d || domain.endsWith(`.${d}`));
+}
+
+function isNoisyWebDomain(domain = "") {
+  return NOISY_WEB_DOMAINS.some((d) => domain === d || domain.endsWith(`.${d}`));
 }
 
 function delay(ms) {
@@ -253,20 +253,14 @@ function getRegistrableDomain(domain = "") {
 function getPrimaryDomainLabel(domain = "") {
   const registrable = getRegistrableDomain(domain);
   if (!registrable) return "";
-
   const parts = registrable.split(".");
-  if (parts.length >= 2) return parts[0];
-  return registrable;
+  return parts[0] || registrable;
 }
 
 function buildHomepageOriginFromUrl(inputUrl = "") {
   const domain = extractDomain(inputUrl);
   if (!domain) return "";
-
-  const registrable = getRegistrableDomain(domain);
-  if (!registrable) return "";
-
-  return `https://${registrable}/`;
+  return `https://${getRegistrableDomain(domain)}/`;
 }
 
 function tokenizeLooseText(input = "") {
@@ -286,26 +280,22 @@ function normalizeAliasToken(input = "") {
   }
 
   t = t.replace(/[_\-./]/g, "");
-  t = t.replace(/official$/g, "");
-  t = t.replace(/^official/g, "");
+  t = t.replace(/^@/, "");
   return t.trim();
 }
 
 function buildBrandTokens(companyName = "") {
   const raw = normalizeSpace(companyName);
-  const normalized = normalizeText(companyName);
   const compact = normalizeCompareText(companyName);
-
   const tokens = raw
     .split(/[\s/(),.&-]+/)
     .map((x) => normalizeText(x))
     .filter(Boolean)
     .filter((x) => x.length >= 2);
 
-  const output = uniqBy(
+  return uniqBy(
     [
       raw,
-      normalized,
       compact,
       ...tokens,
       raw.replace(/\s+/g, ""),
@@ -316,51 +306,32 @@ function buildBrandTokens(companyName = "") {
       .filter(Boolean),
     (x) => x
   );
-
-  return output;
 }
 
 function buildQuerySet(input) {
   const company = safeString(input.companyName);
-  const industry = safeString(input.industry);
   const compact = company.replace(/\s+/g, "");
+  const industry = safeString(input.industry);
 
   return {
     blog: uniqBy(
-      [
-        company,
-        `${company} ${industry}`,
-        `${compact} 후기`,
-      ].filter(Boolean),
+      [company, `${company} ${industry}`, `${compact} 후기`].filter(Boolean),
       (x) => x
     ),
     shopping: uniqBy(
-      [
-        company,
-        `${company} 공식`,
-      ].filter(Boolean),
+      [company, `${company} 공식`].filter(Boolean),
       (x) => x
     ),
     homepage: uniqBy(
-      [
-        `${company} 공식`,
-        `${company} 홈페이지`,
-      ].filter(Boolean),
+      [`${company} 공식`, `${company} 홈페이지`].filter(Boolean),
       (x) => x
     ),
     instagram: uniqBy(
-      [
-        `${company} 인스타그램`,
-        `${company} 공식 인스타`,
-      ].filter(Boolean),
+      [`${company} 인스타그램`, `${company} 공식 인스타`].filter(Boolean),
       (x) => x
     ),
     youtube: uniqBy(
-      [
-        company,
-        `${company} 공식`,
-        `${company} official`,
-      ].filter(Boolean),
+      [company, `${company} 공식`, `${company} official`].filter(Boolean),
       (x) => x
     ),
   };
@@ -558,13 +529,7 @@ function getNaverHeaders() {
   };
 }
 
-async function fetchNaverSearch({
-  endpoint,
-  query,
-  display = 10,
-  start = 1,
-  sort = "sim",
-}) {
+async function fetchNaverSearch({ endpoint, query, display = 10, start = 1, sort = "sim" }) {
   const url = `${endpoint}?query=${encodeURIComponent(query)}&display=${display}&start=${start}&sort=${sort}`;
   const result = await fetchJsonWithTimeout(url, {
     headers: getNaverHeaders(),
@@ -576,12 +541,7 @@ async function fetchNaverSearch({
   };
 }
 
-async function fetchNaverSearchBatchSequential({
-  endpoint,
-  queries = [],
-  sourceLabel,
-  debug,
-}) {
+async function fetchNaverSearchBatchSequential({ endpoint, queries = [], sourceLabel, debug }) {
   const results = [];
   let stopFurther = false;
 
@@ -648,7 +608,33 @@ async function fetchYouTubeSearch({ query, maxResults = 8 }) {
   };
 }
 
-async function fetchYouTubeChannels(channelIds = []) {
+async function fetchYouTubeSearchBatchSequential({ queries = [], debug }) {
+  const results = [];
+
+  for (const query of toArray(queries)) {
+    const result = await fetchYouTubeSearch({
+      query,
+      maxResults: 8,
+    });
+
+    pushRequestLog(debug, {
+      source: "youtube-search",
+      query,
+      status: result?.status,
+      ok: !!result?.ok,
+      rawItems: toArray(result?.data?.items).length,
+      total: toArray(result?.data?.items).length,
+      error: result?.error || result?.data?.error?.message || null,
+    });
+
+    results.push(result);
+    await delay(YOUTUBE_QUERY_DELAY_MS);
+  }
+
+  return results;
+}
+
+async function fetchYouTubeChannels(channelIds = [], debug) {
   const ids = uniqBy(channelIds.filter(Boolean), (x) => x);
   if (!ids.length) {
     return {
@@ -668,17 +654,22 @@ async function fetchYouTubeChannels(channelIds = []) {
     `&key=${encodeURIComponent(apiKey)}`;
 
   const result = await fetchJsonWithTimeout(url);
+
+  pushRequestLog(debug, {
+    source: "youtube-channels",
+    channelCount: ids.length,
+    status: result?.status,
+    ok: !!result?.ok,
+    rawItems: toArray(result?.data?.items).length,
+    total: toArray(result?.data?.items).length,
+    error: result?.error || result?.data?.error?.message || null,
+  });
+
   return {
     source: "youtube-channels",
     ...result,
   };
 }
-
-function maskDomainOnly(inputUrl = "") {
-  const domain = extractDomain(inputUrl);
-  return domain || null;
-}
-
 function extractUrlsFromText(input = "") {
   const text = safeString(input);
   const matches = text.match(/https?:\/\/[^\s<>"')]+/g) || [];
@@ -696,8 +687,7 @@ function extractHandleFromInstagramUrl(inputUrl = "") {
   if (!u) return "";
   const path = (u.pathname || "/").replace(/^\/+|\/+$/g, "");
   if (!path) return "";
-  const first = path.split("/")[0];
-  return first || "";
+  return path.split("/")[0] || "";
 }
 
 function looksLikeInstagramProfileUrl(inputUrl = "") {
@@ -711,6 +701,7 @@ function looksLikeInstagramProfileUrl(inputUrl = "") {
   const handle = extractHandleFromInstagramUrl(inputUrl);
   if (!handle) return false;
   if (handle.startsWith("explore")) return false;
+
   return true;
 }
 
@@ -765,97 +756,6 @@ function looksLikeNaverStoreUrl(inputUrl = "") {
   );
 }
 
-function domainBonus(domain = "") {
-  if (!domain) return 0;
-  if (domain.endsWith(".co.kr")) return 10;
-  if (domain.endsWith(".kr")) return 8;
-  if (domain.endsWith(".com")) return 6;
-  if (domain.endsWith(".co")) return 4;
-  return 0;
-}
-
-function noisePenalty(text = "") {
-  let penalty = 0;
-
-  if (containsAny(text, LOCATION_KEYWORDS)) penalty += 14;
-  if (containsAny(text, ["후기", "리뷰", "사용기", "브이로그", "맛집", "주가", "투자", "중고"])) penalty += 16;
-  if (containsAny(text, ["아울렛", "세일", "할인", "공구"])) penalty += 10;
-
-  return clamp(penalty, 0, 40);
-}
-
-function officialHintScore(text = "") {
-  const hits = countContains(text, OFFICIAL_KEYWORDS);
-  return clamp(hits * 8, 0, 24);
-}
-
-function brandMatchScore(text = "", brandTokens = []) {
-  const normalized = normalizeText(text);
-  const compact = normalizeCompareText(text);
-
-  let score = 0;
-  let matched = 0;
-  let exact = false;
-
-  for (const token of brandTokens) {
-    const tokenNorm = normalizeText(token);
-    const tokenCompact = normalizeCompareText(token);
-    if (!tokenNorm && !tokenCompact) continue;
-
-    const isMatch =
-      (tokenNorm && normalized.includes(tokenNorm)) ||
-      (tokenCompact && compact.includes(tokenCompact));
-
-    if (isMatch) {
-      matched += 1;
-      if (
-        tokenCompact &&
-        (compact === tokenCompact || compact.startsWith(tokenCompact) || compact.endsWith(tokenCompact))
-      ) {
-        exact = true;
-      }
-
-      if (tokenCompact.length >= 10) score += 22;
-      else if (tokenCompact.length >= 5) score += 18;
-      else if (tokenCompact.length >= 3) score += 12;
-      else score += 6;
-    }
-  }
-
-  return {
-    score: clamp(score, 0, 60),
-    matched,
-    exact,
-  };
-}
-
-function aliasMatchScore(text = "", aliasTokens = []) {
-  const compact = normalizeCompareText(text);
-
-  let score = 0;
-  let matched = 0;
-  let exact = false;
-
-  for (const alias of aliasTokens) {
-    const a = normalizeAliasToken(alias);
-    if (!a) continue;
-
-    if (compact.includes(a)) {
-      matched += 1;
-      score += a.length >= 8 ? 24 : a.length >= 5 ? 18 : 10;
-      if (compact === a || compact.startsWith(a) || compact.endsWith(a)) {
-        exact = true;
-      }
-    }
-  }
-
-  return {
-    score: clamp(score, 0, 60),
-    matched,
-    exact,
-  };
-}
-
 function maybeAddAlias(set, value) {
   const raw = safeString(value);
   if (!raw) return;
@@ -898,13 +798,12 @@ function buildLearnedAliases({
     for (const item of toArray(row?.data?.items)) {
       const url = normalizeUrl(item.link || item.url || "");
       const domain = extractDomain(url);
-      const homepageOrigin = buildHomepageOriginFromUrl(url);
-      const domainLabel = getPrimaryDomainLabel(domain);
       const mallName = stripHtml(item.mallName || "");
       const title = stripHtml(item.title || "");
+      const label = getPrimaryDomainLabel(domain);
 
-      if (homepageOrigin && !isNoisyWebDomain(domain)) {
-        maybeAddAlias(learned, domainLabel);
+      if (label && !isNoisyWebDomain(domain)) {
+        maybeAddAlias(learned, label);
       }
 
       if (mallName && mallName.length <= 20) {
@@ -929,7 +828,6 @@ function buildLearnedAliases({
         if (looksLikeInstagramProfileUrl(url)) {
           maybeAddAlias(learned, extractHandleFromInstagramUrl(url));
         }
-
         const domain = extractDomain(url);
         if (looksLikeHomepageUrl(url) && !isNoisyWebDomain(domain)) {
           maybeAddAlias(learned, getPrimaryDomainLabel(domain));
@@ -980,6 +878,7 @@ function buildLearnedAliases({
     if (title.includes(company) || description.includes(company)) {
       maybeAddAlias(learned, title);
       maybeAddAlias(learned, customUrl);
+
       const extracted = extractUrlsFromText(description);
       for (const url of extracted) {
         const domain = extractDomain(url);
@@ -990,15 +889,101 @@ function buildLearnedAliases({
     }
   }
 
-  const filtered = uniqBy(
+  return uniqBy(
     [...learned]
       .map((x) => normalizeAliasToken(x))
       .filter(Boolean)
       .filter((x) => x.length >= 2),
     (x) => x
   );
+}
 
-  return filtered;
+function brandMatchScore(text = "", brandTokens = []) {
+  const normalized = normalizeText(text);
+  const compact = normalizeCompareText(text);
+
+  let score = 0;
+  let matched = 0;
+  let exact = false;
+
+  for (const token of brandTokens) {
+    const tNorm = normalizeText(token);
+    const tCompact = normalizeCompareText(token);
+    if (!tNorm && !tCompact) continue;
+
+    const isMatch =
+      (tNorm && normalized.includes(tNorm)) ||
+      (tCompact && compact.includes(tCompact));
+
+    if (isMatch) {
+      matched += 1;
+      if (tCompact && (compact === tCompact || compact.startsWith(tCompact) || compact.endsWith(tCompact))) {
+        exact = true;
+      }
+
+      if (tCompact.length >= 10) score += 22;
+      else if (tCompact.length >= 5) score += 18;
+      else if (tCompact.length >= 3) score += 12;
+      else score += 6;
+    }
+  }
+
+  return {
+    score: clamp(score, 0, 60),
+    matched,
+    exact,
+  };
+}
+
+function aliasMatchScore(text = "", aliasTokens = []) {
+  const compact = normalizeCompareText(text);
+
+  let score = 0;
+  let matched = 0;
+  let exact = false;
+
+  for (const alias of aliasTokens) {
+    const a = normalizeAliasToken(alias);
+    if (!a) continue;
+
+    if (compact.includes(a)) {
+      matched += 1;
+      score += a.length >= 8 ? 24 : a.length >= 5 ? 18 : 10;
+      if (compact === a || compact.startsWith(a) || compact.endsWith(a)) {
+        exact = true;
+      }
+    }
+  }
+
+  return {
+    score: clamp(score, 0, 60),
+    matched,
+    exact,
+  };
+}
+
+function officialHintScore(text = "") {
+  const hits = countContains(text, OFFICIAL_KEYWORDS);
+  return clamp(hits * 8, 0, 24);
+}
+
+function noisePenalty(text = "") {
+  let penalty = 0;
+
+  if (containsAny(text, LOCATION_KEYWORDS)) penalty += 14;
+  if (containsAny(text, ["후기", "리뷰", "사용기", "브이로그", "맛집", "주가", "투자", "중고"])) penalty += 16;
+  if (containsAny(text, ["아울렛", "세일", "할인", "공구"])) penalty += 10;
+
+  return clamp(penalty, 0, 40);
+}
+
+function domainBonus(domain = "") {
+  if (!domain) return 0;
+  if (domain.endsWith(".co.kr")) return 10;
+  if (domain.endsWith(".kr")) return 8;
+  if (domain.endsWith(".com")) return 6;
+  if (domain.endsWith(".co")) return 4;
+  return 0;
 }
 
 function buildCandidateRecord({
@@ -1025,7 +1010,6 @@ function buildCandidateRecord({
 
 function registerRejectedCandidate(debug, bucket, candidate, extra = {}) {
   if (!debug?.rejectedCandidates?.[bucket]) return;
-
   debug.rejectedCandidates[bucket].push({
     title: candidate?.title || null,
     url: candidate?.url || null,
@@ -1061,59 +1045,6 @@ function chooseBestCandidate(candidates = [], bucket, debug, selectThreshold = 3
   }
 
   return top;
-}
-
-function scoreToConfidence(score = 0) {
-  if (score >= 90) return "high";
-  if (score >= 75) return "medium";
-  if (score >= 55) return "low";
-  return "very-low";
-}
-
-function makeAssetDetail({
-  title = null,
-  url = null,
-  source = null,
-  confidence = "low",
-  snippet = "",
-  meta = {},
-}) {
-  return {
-    title,
-    url,
-    source,
-    confidence,
-    snippet: safeString(snippet),
-    ...meta,
-  };
-}
-
-function summarizeVerifiedAsset(candidate, verifyThreshold = 70) {
-  if (!candidate) {
-    return {
-      found: false,
-      verified: false,
-      confidence: "low",
-      source: null,
-      reason: "후보 없음",
-      score: 0,
-      candidateCount: 0,
-      url: null,
-      title: null,
-    };
-  }
-
-  return {
-    found: true,
-    verified: candidate.score >= verifyThreshold,
-    confidence: scoreToConfidence(candidate.score),
-    source: candidate.source || null,
-    reason: candidate.reason || null,
-    score: candidate.score || 0,
-    candidateCount: 1,
-    url: candidate.url || null,
-    title: candidate.title || null,
-  };
 }
 
 function computeHomepageCandidateScore(item, brandTokens = [], aliasTokens = []) {
@@ -1249,7 +1180,8 @@ function computeNaverStoreCandidateScore(item, brandTokens = [], aliasTokens = [
   const brand = brandMatchScore(`${title} ${snippet} ${mallName} ${productName}`, brandTokens);
   const alias = aliasMatchScore(`${title} ${snippet} ${mallName} ${productName} ${domainLabel}`, aliasTokens);
 
-  const isOfficialRedirect = domain.endsWith("kurly.com") || domainLabel === "kurly";
+  const isOfficialRedirect =
+    domain.endsWith("kurly.com") || domainLabel === "kurly";
 
   if (brand.matched === 0 && alias.matched === 0 && !isOfficialRedirect) {
     return { score: 0, reason: "brand-gate-failed" };
@@ -1390,6 +1322,68 @@ function computeYouTubeCandidateScore(item, brandTokens = [], aliasTokens = []) 
   };
 }
 
+function buildChannelMap(channelItems = []) {
+  const map = {};
+  for (const item of toArray(channelItems)) {
+    const id = safeString(item.id);
+    if (!id) continue;
+    map[id] = item;
+  }
+  return map;
+}
+function makeAssetDetail({
+  title = null,
+  url = null,
+  source = null,
+  confidence = "low",
+  snippet = "",
+  meta = {},
+}) {
+  return {
+    title,
+    url,
+    source,
+    confidence,
+    snippet: safeString(snippet),
+    ...meta,
+  };
+}
+
+function scoreToConfidence(score = 0) {
+  if (score >= 90) return "high";
+  if (score >= 75) return "medium";
+  if (score >= 55) return "low";
+  return "very-low";
+}
+
+function summarizeVerifiedAsset(candidate, verifyThreshold = 70) {
+  if (!candidate) {
+    return {
+      found: false,
+      verified: false,
+      confidence: "low",
+      source: null,
+      reason: "후보 없음",
+      score: 0,
+      candidateCount: 0,
+      url: null,
+      title: null,
+    };
+  }
+
+  return {
+    found: true,
+    verified: candidate.score >= verifyThreshold,
+    confidence: scoreToConfidence(candidate.score),
+    source: candidate.source || null,
+    reason: candidate.reason || null,
+    score: candidate.score || 0,
+    candidateCount: 1,
+    url: candidate.url || null,
+    title: candidate.title || null,
+  };
+}
+
 function mapBlogItemToEvidence(item, query) {
   return {
     type: "brand-mention",
@@ -1456,16 +1450,6 @@ function sortEvidence(evidence = []) {
   });
 }
 
-function buildChannelMap(channelItems = []) {
-  const map = {};
-  for (const item of toArray(channelItems)) {
-    const id = safeString(item.id);
-    if (!id) continue;
-    map[id] = item;
-  }
-  return map;
-}
-
 function chooseTopBlogEvidence(results = [], limit = 6) {
   const output = [];
   for (const row of toArray(results)) {
@@ -1503,6 +1487,84 @@ function chooseTopYouTubeEvidence(candidates = [], limit = 3) {
       )
     )
   ).slice(0, limit);
+}
+
+function makeDiscoverySkeleton() {
+  return {
+    assets: {
+      homepage: null,
+      instagram: null,
+      youtube: null,
+      naverStore: null,
+      map: null,
+    },
+    assetDetails: {
+      homepage: null,
+      instagram: null,
+      youtube: null,
+      naverStore: null,
+      map: null,
+    },
+    verified: makeVerified(),
+    pageSpeed: {
+      ok: false,
+      error: "not-run",
+    },
+    counts: {
+      naverBlogItems: 0,
+      naverShoppingItems: 0,
+      naverWebHomepageItems: 0,
+      naverWebInstagramItems: 0,
+      youtubeItems: 0,
+      regionHits: 0,
+      assetCount: 0,
+      verifiedAssetCount: 0,
+    },
+    sourceStatus: makeSourceStatus(),
+    rawCount: makeRawCount(),
+  };
+}
+
+function applySelectedAsset(discovery, key, candidate, verifiedSummary) {
+  if (!candidate) {
+    discovery.assets[key] = null;
+    discovery.assetDetails[key] = null;
+    discovery.verified[key] = {
+      ...discovery.verified[key],
+      ...verifiedSummary,
+      candidateCount: verifiedSummary?.candidateCount || 0,
+    };
+    return;
+  }
+
+  discovery.assets[key] = candidate.url || null;
+  discovery.assetDetails[key] = makeAssetDetail({
+    title: candidate.title || null,
+    url: candidate.url || null,
+    source: candidate.source || null,
+    confidence: scoreToConfidence(candidate.score || 0),
+    snippet: candidate.snippet || "",
+    meta:
+      key === "youtube"
+        ? {
+            subscribers: safeNumber(candidate?.meta?.subscriberCount),
+            videoCount: safeNumber(candidate?.meta?.videoCount),
+            viewCount: safeNumber(candidate?.meta?.viewCount),
+          }
+        : key === "naverStore"
+          ? {
+              mallName: safeString(candidate?.meta?.mallName),
+              brand: safeString(candidate?.meta?.brand),
+              maker: safeString(candidate?.meta?.maker),
+              price: safeString(candidate?.meta?.price),
+            }
+          : {},
+  });
+
+  discovery.verified[key] = {
+    ...discovery.verified[key],
+    ...verifiedSummary,
+  };
 }
 
 function buildHomepageCandidatesFromWebResults(results = [], brandTokens = [], aliasTokens = [], debug) {
@@ -1554,7 +1616,7 @@ function buildHomepageCandidatesFromWebResults(results = [], brandTokens = [], a
   return uniqBy(candidates, (x) => cleanTrailingSlash(x.url));
 }
 
-function buildHomepageCandidatesFromShoppingResults(results = [], brandTokens = [], aliasTokens = [], debug) {
+function buildHomepageCandidatesFromShoppingResults(results = [], brandTokens = [], aliasTokens = []) {
   const candidates = [];
 
   for (const row of toArray(results)) {
@@ -1772,57 +1834,384 @@ function buildYouTubeCandidates(searchResults = [], channelMap = {}, brandTokens
   return uniqBy(candidates, (x) => cleanTrailingSlash(x.url));
 }
 
-function makeDiscoverySkeleton() {
+function sumResultItems(rows = []) {
+  return toArray(rows).reduce((acc, row) => acc + toArray(row?.data?.items).length, 0);
+}
+
+function sumResultTotals(rows = []) {
+  return toArray(rows).reduce((acc, row) => acc + safeNumber(row?.data?.total), 0);
+}
+
+function collectResultErrors(rows = []) {
+  const errors = [];
+
+  for (const row of toArray(rows)) {
+    const dataError =
+      row?.data?.errorMessage ||
+      row?.data?.error?.message ||
+      row?.data?.message ||
+      null;
+
+    const textError =
+      !row?.ok && row?.text
+        ? safeString(row.text).slice(0, 200)
+        : null;
+
+    const error = row?.error || dataError || textError;
+    if (error) errors.push(safeString(error));
+  }
+
+  return uniqBy(errors.filter(Boolean), (x) => x);
+}
+
+function buildAggregateSourceStatus(rows = [], overrides = {}) {
+  const list = toArray(rows);
+  const statuses = list.map((x) => x?.status).filter((x) => x !== null && x !== undefined);
+  const rawItems = sumResultItems(list);
+  const total = sumResultTotals(list);
+  const errors = collectResultErrors(list);
+  const fetchOk = list.length > 0 && list.every((x) => !!x?.ok);
+  const parseOk = list.length > 0 && list.every((x) => x?.data !== null && x?.data !== undefined);
+  const candidateFound = rawItems > 0;
+
   return {
-    assets: {
-      homepage: null,
-      instagram: null,
-      youtube: null,
-      naverStore: null,
-      map: null,
-    },
-    assetDetails: {
-      homepage: null,
-      instagram: null,
-      youtube: null,
-      naverStore: null,
-      map: null,
-    },
-    verified: makeVerified(),
-    pageSpeed: {
-      ok: false,
-      error: "not-run",
-    },
-    counts: {
-      naverBlogItems: 0,
-      naverShoppingItems: 0,
-      naverWebHomepageItems: 0,
-      naverWebInstagramItems: 0,
-      youtubeItems: 0,
-      regionHits: 0,
-      assetCount: 0,
-      verifiedAssetCount: 0,
-    },
-    sourceStatus: makeSourceStatus(),
-    rawCount: makeRawCount(),
+    fetchOk,
+    parseOk,
+    candidateFound,
+    verified: !!overrides.verified,
+    total,
+    rawItems,
+    status: statuses.length ? statuses[0] : null,
+    error: errors[0] || null,
+    errorCount: errors.length,
   };
 }
 
-function applySelectedAsset(discovery, key, candidate, verifiedSummary) {
-  if (!candidate) {
-    discovery.assets[key] = null;
-    discovery.assetDetails[key] = null;
-    discovery.verified[key] = {
-      ...discovery.verified[key],
-      ...verifiedSummary,
-      candidateCount: verifiedSummary?.candidateCount || 0,
+function buildYouTubeSourceStatus(searchRows = [], channelsResult = null, candidateCount = 0, verified = false) {
+  const searchList = toArray(searchRows);
+  const searchErrors = collectResultErrors(searchList);
+  const searchStatuses = searchList
+    .map((x) => x?.status)
+    .filter((x) => x !== null && x !== undefined);
+
+  const channelError =
+    channelsResult?.error ||
+    channelsResult?.data?.error?.message ||
+    channelsResult?.data?.errorMessage ||
+    null;
+
+  const errors = uniqBy(
+    [...searchErrors, ...(channelError ? [safeString(channelError)] : [])].filter(Boolean),
+    (x) => x
+  );
+
+  return {
+    fetchOk:
+      searchList.length > 0 &&
+      searchList.every((x) => !!x?.ok) &&
+      !!channelsResult?.ok,
+    parseOk:
+      searchList.length > 0 &&
+      searchList.every((x) => x?.data !== null && x?.data !== undefined) &&
+      channelsResult?.data !== null &&
+      channelsResult?.data !== undefined,
+    candidateFound: candidateCount > 0,
+    verified: !!verified,
+    total: sumResultItems(searchList),
+    rawItems: sumResultItems(searchList),
+    status: searchStatuses[0] || channelsResult?.status || null,
+    error: errors[0] || null,
+    errorCount: errors.length,
+  };
+}
+
+function countRegionHits(blogEvidence = [], region = "") {
+  const regionText = normalizeText(region);
+  if (!regionText) return 0;
+
+  let hits = 0;
+  for (const item of toArray(blogEvidence)) {
+    const text = `${item.title || ""} ${item.snippet || ""}`;
+    if (normalizeText(text).includes(regionText)) hits += 1;
+  }
+  return hits;
+}
+
+function computeDiscoveryFromSearchResults({
+  input,
+  blogResults,
+  shoppingResults,
+  homepageWebResults,
+  instagramWebResults,
+  youtubeSearchResults,
+  youtubeChannelsResult,
+  debug,
+}) {
+  const discovery = makeDiscoverySkeleton();
+
+  const baseBrandTokens = buildBrandTokens(input.companyName);
+  const learnedAliases = buildLearnedAliases({
+    input,
+    shoppingResults,
+    homepageWebResults,
+    instagramWebResults,
+    youtubeChannelsResult,
+    baseTokens: baseBrandTokens,
+  });
+
+  const finalAliasTokens = uniqBy(
+    [...baseBrandTokens.map(normalizeAliasToken), ...learnedAliases.map(normalizeAliasToken)]
+      .filter(Boolean),
+    (x) => x
+  );
+
+  debug.brandTokens.base = baseBrandTokens;
+  debug.brandTokens.learned = learnedAliases;
+  debug.brandTokens.final = finalAliasTokens;
+
+  const channelItems = toArray(youtubeChannelsResult?.data?.items);
+  const channelMap = buildChannelMap(channelItems);
+
+  const blogEvidence = chooseTopBlogEvidence(blogResults, 6);
+  const shoppingEvidence = chooseTopShoppingEvidence(shoppingResults, 6);
+
+  const homepageCandidates = uniqBy(
+    [
+      ...buildHomepageCandidatesFromWebResults(
+        homepageWebResults,
+        baseBrandTokens,
+        finalAliasTokens,
+        debug
+      ),
+      ...buildHomepageCandidatesFromShoppingResults(
+        shoppingResults,
+        baseBrandTokens,
+        finalAliasTokens
+      ),
+    ],
+    (x) => cleanTrailingSlash(x.url)
+  );
+
+  const instagramCandidates = buildInstagramCandidatesFromWebResults(
+    instagramWebResults,
+    baseBrandTokens,
+    finalAliasTokens,
+    debug
+  );
+
+  const naverStoreCandidates = buildNaverStoreCandidatesFromShopping(
+    shoppingResults,
+    baseBrandTokens,
+    finalAliasTokens,
+    debug
+  );
+
+  const youtubeCandidates = buildYouTubeCandidates(
+    youtubeSearchResults,
+    channelMap,
+    baseBrandTokens,
+    finalAliasTokens,
+    debug
+  );
+
+  const selectedHomepage = chooseBestCandidate(homepageCandidates, "homepage", debug, 45);
+  const selectedInstagram = chooseBestCandidate(instagramCandidates, "instagram", debug, 40);
+  const selectedNaverStore = chooseBestCandidate(naverStoreCandidates, "naverStore", debug, 40);
+  const selectedYoutube = chooseBestCandidate(youtubeCandidates, "youtube", debug, 45);
+
+  const homepageVerified = summarizeVerifiedAsset(selectedHomepage, 65);
+  const instagramVerified = summarizeVerifiedAsset(selectedInstagram, 60);
+  const naverStoreVerified = summarizeVerifiedAsset(selectedNaverStore, 60);
+  const youtubeVerified = summarizeVerifiedAsset(selectedYoutube, 65);
+
+  homepageVerified.candidateCount = homepageCandidates.length;
+  instagramVerified.candidateCount = instagramCandidates.length;
+  naverStoreVerified.candidateCount = naverStoreCandidates.length;
+  youtubeVerified.candidateCount = youtubeCandidates.length;
+
+  applySelectedAsset(discovery, "homepage", selectedHomepage, homepageVerified);
+  applySelectedAsset(discovery, "instagram", selectedInstagram, instagramVerified);
+  applySelectedAsset(discovery, "naverStore", selectedNaverStore, naverStoreVerified);
+  applySelectedAsset(discovery, "youtube", selectedYoutube, youtubeVerified);
+
+  discovery.verified.map = {
+    ...discovery.verified.map,
+    found: false,
+    verified: false,
+    confidence: "low",
+    source: null,
+    reason: "지도 연동 전",
+    score: 0,
+    candidateCount: 0,
+    url: null,
+    title: null,
+  };
+
+  const evidence = sortEvidence(
+    dedupeEvidence([
+      ...chooseTopYouTubeEvidence(youtubeCandidates, 3),
+      ...shoppingEvidence,
+      ...blogEvidence,
+    ])
+  );
+
+  const verifiedAssetCount = [
+    discovery.verified.homepage?.verified,
+    discovery.verified.instagram?.verified,
+    discovery.verified.youtube?.verified,
+    discovery.verified.naverStore?.verified,
+    discovery.verified.map?.verified,
+  ].filter(Boolean).length;
+
+  discovery.counts.naverBlogItems = sumResultItems(blogResults);
+  discovery.counts.naverShoppingItems = sumResultItems(shoppingResults);
+  discovery.counts.naverWebHomepageItems = sumResultItems(homepageWebResults);
+  discovery.counts.naverWebInstagramItems = sumResultItems(instagramWebResults);
+  discovery.counts.youtubeItems = youtubeCandidates.length;
+  discovery.counts.regionHits = countRegionHits(blogEvidence, input.region);
+  discovery.counts.assetCount = [
+    discovery.assets.homepage,
+    discovery.assets.instagram,
+    discovery.assets.youtube,
+    discovery.assets.naverStore,
+    discovery.assets.map,
+  ].filter(Boolean).length;
+  discovery.counts.verifiedAssetCount = verifiedAssetCount;
+
+  discovery.rawCount.naverBlogFetched = sumResultItems(blogResults);
+  discovery.rawCount.naverShoppingFetched = sumResultItems(shoppingResults);
+  discovery.rawCount.naverWebHomepageFetched = sumResultItems(homepageWebResults);
+  discovery.rawCount.naverWebInstagramFetched = sumResultItems(instagramWebResults);
+  discovery.rawCount.youtubeSearchFetched = sumResultItems(youtubeSearchResults);
+  discovery.rawCount.youtubeChannelFetched = channelItems.length;
+  discovery.rawCount.evidenceBuilt = evidence.length;
+  discovery.rawCount.verifiedAssets = verifiedAssetCount;
+
+  discovery.sourceStatus.naverBlog = buildAggregateSourceStatus(blogResults, {
+    verified: false,
+  });
+  discovery.sourceStatus.naverShopping = buildAggregateSourceStatus(shoppingResults, {
+    verified: discovery.verified.naverStore?.verified || false,
+  });
+  discovery.sourceStatus.naverWebHomepage = buildAggregateSourceStatus(homepageWebResults, {
+    verified: discovery.verified.homepage?.verified || false,
+  });
+  discovery.sourceStatus.naverWebInstagram = buildAggregateSourceStatus(instagramWebResults, {
+    verified: discovery.verified.instagram?.verified || false,
+  });
+  discovery.sourceStatus.youtube = buildYouTubeSourceStatus(
+    youtubeSearchResults,
+    youtubeChannelsResult,
+    youtubeCandidates.length,
+    discovery.verified.youtube?.verified || false
+  );
+
+  return {
+    discovery,
+    evidence,
+  };
+}
+
+async function fetchPageSpeedSummary(targetUrl, debug) {
+  const apiKey = env("PAGESPEED_API_KEY");
+
+  if (!targetUrl) {
+    return {
+      ok: false,
+      status: null,
+      error: "homepage missing",
+      summary: null,
+      source: "pagespeed",
     };
-    return;
   }
 
-  discovery.assets[key] = candidate.url || null;
-  discovery.assetDetails[key] = makeAssetDetail({
-    title: candidate.title || null,
-    url: candidate.url || null,
-    source: candidate.source || null,
-    confidence: scoreToConfidence(candidate.score
+  if (!apiKey) {
+    return {
+      ok: false,
+      status: null,
+      error: "pagespeed api key missing",
+      summary: null,
+      source: "pagespeed",
+    };
+  }
+
+  const url =
+    `${PAGESPEED_API}?url=${encodeURIComponent(targetUrl)}` +
+    `&strategy=mobile` +
+    `&key=${encodeURIComponent(apiKey)}`;
+
+  pushRequestLog(debug, {
+    source: "pagespeed",
+    targetDomain: extractDomain(targetUrl),
+    status: "requested",
+  });
+
+  const result = await fetchJsonWithTimeout(url, {}, 20000);
+
+  if (!result.ok || !result.data) {
+    return {
+      ok: false,
+      status: result.status,
+      error:
+        result.error ||
+        result?.data?.error?.message ||
+        "pagespeed fetch failed",
+      summary: null,
+      source: "pagespeed",
+    };
+  }
+
+  const lighthouse = result.data?.lighthouseResult || {};
+  const categories = lighthouse?.categories || {};
+  const audits = lighthouse?.audits || {};
+
+  return {
+    ok: true,
+    status: result.status,
+    error: null,
+    source: "pagespeed",
+    summary: {
+      performanceScore: Math.round(safeNumber(categories?.performance?.score) * 100),
+      accessibilityScore: Math.round(safeNumber(categories?.accessibility?.score) * 100),
+      bestPracticesScore: Math.round(safeNumber(categories?.["best-practices"]?.score) * 100),
+      seoScore: Math.round(safeNumber(categories?.seo?.score) * 100),
+      firstContentfulPaint: safeString(audits?.["first-contentful-paint"]?.displayValue),
+      largestContentfulPaint: safeString(audits?.["largest-contentful-paint"]?.displayValue),
+      speedIndex: safeString(audits?.["speed-index"]?.displayValue),
+      totalBlockingTime: safeString(audits?.["total-blocking-time"]?.displayValue),
+      cumulativeLayoutShift: safeString(audits?.["cumulative-layout-shift"]?.displayValue),
+    },
+  };
+}
+
+function computeSearchVisibility(discovery) {
+  let score = 0;
+
+  const blogTotal = safeNumber(discovery?.sourceStatus?.naverBlog?.total);
+  const shoppingRaw = safeNumber(discovery?.sourceStatus?.naverShopping?.rawItems);
+
+  if (blogTotal > 0) score += clamp(Math.round(Math.log10(blogTotal + 1) * 10), 8, 30);
+  if (shoppingRaw > 0) score += clamp(shoppingRaw * 2, 0, 16);
+
+  if (discovery?.verified?.homepage?.found) score += 10;
+  if (discovery?.verified?.homepage?.verified) score += 16;
+
+  if (discovery?.verified?.instagram?.found) score += 6;
+  if (discovery?.verified?.instagram?.verified) score += 10;
+
+  if (discovery?.verified?.naverStore?.found) score += 8;
+  if (discovery?.verified?.naverStore?.verified) score += 12;
+
+  return clamp(Math.round(score), 0, 100);
+}
+
+function computeContentPresence(discovery, evidence) {
+  let score = 0;
+
+  if (discovery?.verified?.youtube?.found) score += 20;
+  if (discovery?.verified?.youtube?.verified) score += 30;
+
+  const youtubeEvidenceCount = toArray(evidence).filter((x) => x?.type === "youtube-channel").length;
+  const blogEvidenceCount = toArray(evidence).filter((x) => x?.type === "brand-mention").length;
+
+  score += clamp(youtubeEvidenceCount *
