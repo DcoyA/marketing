@@ -799,7 +799,7 @@ if (storePick.chosen && /^\/main\/products\//i.test(pathOf(storePick.chosen.url)
         },
         ai: {
           used: !!aiStrategy,
-          model: !!aiStrategy ? (env("OPENAI_MODEL") || "gpt-4.1-mini") : null
+          model: !!aiStrategy ? (env("OPENAI_MODEL") || "gemini-2.5-flash") : null
         },
 
       },
