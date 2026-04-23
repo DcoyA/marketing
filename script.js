@@ -28,11 +28,15 @@ window.addEventListener("DOMContentLoaded", () => {
 
   console.log("script loaded");
   console.log("form exists:", !!form);
+  console.log("submitBtn exists:", !!submitBtn);
 
-  if (!form) {
-    console.error("diagnosisForm not found");
-    return;
-  }
+  window.addEventListener("error", (e) => {
+    console.error("window error:", e.message, e.error);
+  });
+
+  window.addEventListener("unhandledrejection", (e) => {
+    console.error("unhandled promise rejection:", e.reason);
+  });
 
   function escapeHtml(value = "") {
     return String(value)
@@ -228,17 +232,11 @@ window.addEventListener("DOMContentLoaded", () => {
 
     if (loadingBox) loadingBox.classList.add("hidden");
     if (resultSection) resultSection.classList.remove("hidden");
-
-    if (resultSection) {
-      resultSection.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+    resultSection?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    console.log("submit intercepted");
+  async function runDiagnosis() {
+    console.log("button click intercepted");
 
     const payload = {
       companyName: $("companyName")?.value?.trim() || "",
@@ -254,10 +252,8 @@ window.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    if (submitBtn) {
-      submitBtn.disabled = true;
-      submitBtn.textContent = "진단 중...";
-    }
+    submitBtn.disabled = true;
+    submitBtn.textContent = "진단 중...";
 
     showLoading();
 
@@ -295,18 +291,15 @@ window.addEventListener("DOMContentLoaded", () => {
       setStage(4);
       renderResult(data);
     } catch (error) {
-      console.error("submit error:", error);
-
-      if (loadingBox) loadingBox.classList.add("hidden");
-
+      console.error("runDiagnosis error:", error);
+      loadingBox?.classList.add("hidden");
       alert(`분석 중 오류가 발생했습니다.\n\n${error.message}`);
     } finally {
       timers.forEach(clearTimeout);
-
-      if (submitBtn) {
-        submitBtn.disabled = false;
-        submitBtn.textContent = "진단하기";
-      }
+      submitBtn.disabled = false;
+      submitBtn.textContent = "진단하기";
     }
-  });
+  }
+
+  submitBtn?.addEventListener("click", runDiagnosis);
 });
