@@ -732,14 +732,15 @@ if (storePick.chosen && /^\/main\/products\//i.test(pathOf(storePick.chosen.url)
       ],
     };
 
-    const aiStrategy = await generateStrategicDiagnosisLLM({
-      companyName,
-      industry,
-      region,
-      discovery,
-      score,
-      evidence,
-    });
+    const aiStrategy = await generateStrategicDiagnosisGemini({
+  companyName,
+  industry,
+  region,
+  discovery,
+  score,
+  evidence,
+});
+
 
     if (aiStrategy) {
       diagnosis = {
