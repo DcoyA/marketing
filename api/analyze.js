@@ -882,7 +882,7 @@ export default async function handler(req, res) {
       };
     }
 
-        const responsePayload = {
+    const responsePayload = {
       ok: true,
       input: { companyName, industry, region, email },
       discovery,
@@ -954,7 +954,6 @@ export default async function handler(req, res) {
 
     return res.status(200).json(responsePayload);
 
-    });
   } catch (e) {
     return res.status(500).json({
       ok: false,
