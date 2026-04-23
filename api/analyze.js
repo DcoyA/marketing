@@ -23,7 +23,7 @@ const GEMINI_ENDPOINT_BASE = "https://generativelanguage.googleapis.com/v1beta/m
 
 const ENV = {
   GEMINI_API_KEY: process.env.GEMINI_API_KEY || "",
-  GEMINI_MODEL: process.env.GEMINI_MODEL || "gemini-2.0-flash",
+  GEMINI_MODEL: process.env.GEMINI_MODEL || "gemini-2.5-flash",
   GOOGLE_SEARCH_API_KEY: process.env.GOOGLE_SEARCH_API_KEY || "",
   GOOGLE_SEARCH_ENGINE_ID: process.env.GOOGLE_SEARCH_ENGINE_ID || "",
   YOUTUBE_API_KEY: process.env.YOUTUBE_API_KEY || "",
