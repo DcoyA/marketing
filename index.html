@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI 마케팅 도우미 | 업체명 기반 자동 탐색 진단</title>
+  <title>AI 마케팅 도우미 | 업체 진단</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
@@ -13,63 +13,65 @@
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
-  <div class="bg-orb orb-1"></div>
-  <div class="bg-orb orb-2"></div>
+  <div class="bg-blur bg-blur-1"></div>
+  <div class="bg-blur bg-blur-2"></div>
 
   <header class="topbar">
     <div class="container topbar-inner">
       <div class="brand">
         <div class="brand-mark">A</div>
-        <div>
+        <div class="brand-copy">
           <strong>AI 마케팅 도우미</strong>
-          <p>업체명만 넣어도 공개 웹을 자동 탐색하는 3차 진단</p>
+          <p>업체명만 입력하면 시작되는 마케팅 진단</p>
         </div>
       </div>
-      <div class="topbar-badge">3차 자동 탐색 버전</div>
+      <div class="top-badge">3차 자동 탐색 버전</div>
     </div>
   </header>
 
   <main class="container">
     <section class="hero">
-      <div class="hero-copy">
-        <span class="eyebrow">AI MARKETING DISCOVERY</span>
+      <div class="hero-left">
+        <span class="eyebrow">AI MARKETING DIAGNOSIS</span>
         <h1>
-          사용자가 링크를 안 줘도<br />
-          <span>업체명을 먼저 찾고</span> 진단합니다
+          우리 업체,<br />
+          지금 온라인에서<br />
+          <span>어떻게 보이고 있는지</span><br />
+          먼저 진단해보세요
         </h1>
         <p class="hero-desc">
-          업체명, 업종, 지역을 입력하면 시스템이 공개 웹에서 홈페이지·유튜브·인스타그램·지도·쇼핑 흔적을 먼저 탐색하고,
-          현재 노출 상태와 마케팅상 공백을 기반으로 1차 진단을 제공합니다.
+          업체명과 업종, 지역만 입력하면 현재 노출 상태와 마케팅 공백을 바탕으로
+          우선 점검해야 할 포인트를 정리해드립니다.
         </p>
 
-        <div class="hero-points">
-          <div class="point-card">
-            <strong>자동 탐색</strong>
-            <p>업체명을 기반으로 공개 웹 검색 자산을 먼저 찾음</p>
+        <div class="hero-trust">
+          <div class="trust-item">
+            <strong>빠른 초기 진단</strong>
+            <p>입력 즉시 현재 상태를 점검</p>
           </div>
-          <div class="point-card">
-            <strong>업종별 분기</strong>
-            <p>IT / 로컬 / 이커머스 / 전문서비스별 다른 탐색 로직</p>
+          <div class="trust-item">
+            <strong>업종별 분석 기준</strong>
+            <p>업종에 따라 다른 관점으로 진단</p>
           </div>
-          <div class="point-card">
-            <strong>실무형 1차 진단</strong>
-            <p>발견 자산, 공백, 우선 행동을 바로 정리</p>
+          <div class="trust-item">
+            <strong>실행 우선순위 제안</strong>
+            <p>무엇부터 손봐야 할지 정리</p>
           </div>
         </div>
       </div>
 
-      <div class="hero-panel">
-        <div class="panel glass">
-          <div class="panel-top">
+      <div class="hero-right">
+        <div class="form-card">
+          <div class="form-card-top">
             <div>
-              <span class="panel-kicker">무료 초기 진단</span>
-              <h2>업체명 기반 자동 탐색</h2>
+              <span class="form-kicker">무료 초기 진단</span>
+              <h2>업체 진단 시작</h2>
             </div>
-            <div class="soft-chip">버튼명 유지: 진단하기</div>
+            <div class="form-chip">버튼명 유지: 진단하기</div>
           </div>
 
           <form id="diagnosisForm" class="form-grid">
-            <div class="field full">
+            <div class="field field-full">
               <label for="companyName">업체명</label>
               <input
                 id="companyName"
@@ -103,52 +105,41 @@
               />
             </div>
 
-            <div class="field full">
+            <div class="field field-full">
               <label for="email">이메일</label>
               <input
                 id="email"
                 name="email"
                 type="email"
-                placeholder="향후 콜드메일/후속 제안용 이메일"
+                placeholder="향후 진단 결과 안내용 이메일"
                 required
               />
             </div>
 
-            <button id="submitBtn" class="btn-primary full" type="submit">
+            <button id="submitBtn" class="btn-primary field-full" type="submit">
               진단하기
             </button>
           </form>
 
-          <div class="form-note">
-            현재 결과는 <strong>공개 웹 자동 탐색 기반의 1차 진단</strong>입니다.
-            저장/공유율, 광고비별 매출 상승률, 전환율 예측은 추후 계정 연동 단계에서 고도화할 수 있습니다.
-          </div>
+          <p class="form-note">
+            현재 단계는 공개 정보 기반의 초기 진단이며, 더 정밀한 성과 분석은 추후 확장됩니다.
+          </p>
         </div>
       </div>
     </section>
 
-    <section class="workflow">
-      <div class="section-head">
-        <span class="eyebrow">HOW IT WORKS</span>
-        <h2>3차 자동 탐색 흐름</h2>
+    <section class="mini-info">
+      <div class="mini-card">
+        <span>진단 항목</span>
+        <strong>검색 노출 · 채널 존재감 · 웹 품질</strong>
       </div>
-
-      <div class="workflow-grid">
-        <article class="workflow-card">
-          <span class="step">01</span>
-          <h3>업체명 입력</h3>
-          <p>업체명, 업종, 지역, 이메일만 받습니다.</p>
-        </article>
-        <article class="workflow-card">
-          <span class="step">02</span>
-          <h3>공개 웹 탐색</h3>
-          <p>공식 홈페이지, 인스타그램, 유튜브, 지도, 스토어 흔적을 우선 탐색합니다.</p>
-        </article>
-        <article class="workflow-card">
-          <span class="step">03</span>
-          <h3>매칭 & 1차 진단</h3>
-          <p>업체명 유사도, 지역 일치도, 플랫폼 유형을 기준으로 후보를 매칭합니다.</p>
-        </article>
+      <div class="mini-card">
+        <span>결과 방식</span>
+        <strong>현재 상태 요약 + 우선 실행 항목 제안</strong>
+      </div>
+      <div class="mini-card">
+        <span>추천 대상</span>
+        <strong>온라인 노출 상태를 빠르게 점검하고 싶은 업체</strong>
       </div>
     </section>
 
@@ -157,7 +148,7 @@
         <div class="loading-top">
           <div>
             <span class="eyebrow">ANALYZING</span>
-            <h2>공개 웹 자동 탐색 중</h2>
+            <h2>업체 진단을 준비하고 있습니다</h2>
           </div>
           <div class="loader-ring"></div>
         </div>
@@ -167,12 +158,12 @@
         </div>
 
         <div class="loading-steps">
-          <div id="step-discovery" class="loading-step active">1. 검색 자산 탐색</div>
-          <div id="step-matching" class="loading-step">2. 후보 매칭</div>
+          <div id="step-discovery" class="loading-step active">1. 관련 자산 탐색</div>
+          <div id="step-matching" class="loading-step">2. 후보 정리</div>
           <div id="step-analysis" class="loading-step">3. 초기 진단 생성</div>
         </div>
 
-        <p id="loadingText" class="loading-text">업체명을 기반으로 공개 웹을 탐색하고 있습니다...</p>
+        <p id="loadingText" class="loading-text">입력한 업체 정보를 바탕으로 진단을 준비하고 있습니다...</p>
       </div>
 
       <section id="resultSection" class="result-section hidden">
@@ -182,14 +173,14 @@
             <h2>초기 진단 결과</h2>
             <p id="resultMeta" class="result-meta"></p>
           </div>
-          <div class="result-badge">공개 웹 자동 탐색 기반</div>
+          <div class="result-badge">초기 진단</div>
         </div>
 
         <div class="summary-grid">
           <div class="summary-card highlight">
             <span>종합 점수</span>
             <div id="overallScore" class="score-big">0</div>
-            <p>발견된 자산과 공개 노출 신호를 바탕으로 계산한 1차 스코어</p>
+            <p>현재 발견된 신호를 바탕으로 계산한 1차 점수</p>
           </div>
 
           <div class="summary-card">
@@ -199,9 +190,9 @@
           </div>
 
           <div class="summary-card">
-            <span>핵심 한줄</span>
+            <span>핵심 요약</span>
             <h3 id="executiveSummary">-</h3>
-            <p>정밀 계정 연동 전 단계에서 확인 가능한 핵심 결론</p>
+            <p>현재 상태에서 가장 먼저 봐야 할 결론</p>
           </div>
         </div>
 
