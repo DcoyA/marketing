@@ -1,5 +1,6 @@
 const NAVER_BLOG_API = "https://openapi.naver.com/v1/search/blog.json";
 const NAVER_SHOPPING_API = "https://openapi.naver.com/v1/search/shop.json";
+const NAVER_WEBKR_API = "https://openapi.naver.com/v1/search/webkr.json";
 
 function s(v) {
   return String(v || "").trim();
@@ -36,6 +37,78 @@ function uniqBy(arr, keyFn) {
   return out;
 }
 
+function normalizeUrl(url = "") {
+  try {
+    const u = new URL(url);
+    u.hash = "";
+    return u.toString();
+  } catch {
+    return s(url);
+  }
+}
+
+function extractDomain(url = "") {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function extractUrlsFromText(text = "") {
+  const matches = s(text).match(/https?:\/\/[^\s<>"')]+/g) || [];
+  return uniqBy(
+    matches.map((x) => x.replace(/[),.;]+$/g, "")).map(normalizeUrl),
+    (x) => x
+  );
+}
+
+function isInstagramProfileUrl(url = "") {
+  const domain = extractDomain(url);
+  if (!(domain === "instagram.com" || domain.endsWith(".instagram.com"))) return false;
+
+  try {
+    const path = new URL(url).pathname.toLowerCase();
+    if (!path || path === "/") return false;
+    if (path.startsWith("/p/")) return false;
+    if (path.startsWith("/reel/")) return false;
+    if (path.startsWith("/reels/")) return false;
+    if (path.startsWith("/stories/")) return false;
+    if (path.startsWith("/explore/")) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isHomepageCandidateUrl(url = "") {
+  const domain = extractDomain(url);
+  if (!domain) return false;
+
+  if (domain.includes("instagram.com")) return false;
+  if (domain.includes("youtube.com")) return false;
+  if (domain.includes("youtu.be")) return false;
+  if (domain.includes("blog.naver.com")) return false;
+  if (domain.includes("search.naver.com")) return false;
+  if (domain.includes("cafe.naver.com")) return false;
+  if (domain.includes("news.naver.com")) return false;
+  if (domain.includes("facebook.com")) return false;
+  if (domain.includes("x.com")) return false;
+  if (domain.includes("twitter.com")) return false;
+  if (domain.includes("tiktok.com")) return false;
+
+  try {
+    const path = new URL(url).pathname.toLowerCase();
+    if (path.startsWith("/search")) return false;
+    if (path.startsWith("/p/")) return false;
+    if (path.startsWith("/reel/")) return false;
+  } catch {
+    return false;
+  }
+
+  return true;
+}
+
 function makeEmptyStatus() {
   return {
     fetchOk: false,
@@ -47,6 +120,29 @@ function makeEmptyStatus() {
     status: null,
     error: null,
     errorCount: 0,
+  };
+}
+
+function buildStatus(rows) {
+  const list = rows || [];
+  const rawItems = list.reduce((acc, row) => {
+    const items = Array.isArray(row?.data?.items) ? row.data.items : [];
+    return acc + items.length;
+  }, 0);
+
+  const total = list.reduce((acc, row) => acc + n(row?.data?.total), 0);
+  const errors = list.map((row) => row?.error).filter(Boolean);
+
+  return {
+    fetchOk: list.length > 0 && list.every((x) => !!x.ok),
+    parseOk: list.length > 0 && list.every((x) => x.data !== null),
+    candidateFound: rawItems > 0,
+    verified: false,
+    total,
+    rawItems,
+    status: list.length ? list[list.length - 1].status : null,
+    error: errors[0] || null,
+    errorCount: errors.length,
   };
 }
 
@@ -75,7 +171,7 @@ function makeBaseResponse(input) {
           verified: false,
           confidence: "low",
           source: null,
-          reason: "stage 2: not connected",
+          reason: "stage 3: candidate only",
           score: 0,
           candidateCount: 0,
           url: null,
@@ -86,7 +182,7 @@ function makeBaseResponse(input) {
           verified: false,
           confidence: "low",
           source: null,
-          reason: "stage 2: not connected",
+          reason: "stage 3: candidate only",
           score: 0,
           candidateCount: 0,
           url: null,
@@ -97,7 +193,7 @@ function makeBaseResponse(input) {
           verified: false,
           confidence: "low",
           source: null,
-          reason: "stage 2: not connected",
+          reason: "stage 3: not connected",
           score: 0,
           candidateCount: 0,
           url: null,
@@ -108,7 +204,7 @@ function makeBaseResponse(input) {
           verified: false,
           confidence: "low",
           source: null,
-          reason: "stage 2: not connected",
+          reason: "stage 3: candidate only",
           score: 0,
           candidateCount: 0,
           url: null,
@@ -119,7 +215,7 @@ function makeBaseResponse(input) {
           verified: false,
           confidence: "low",
           source: null,
-          reason: "stage 2: not connected",
+          reason: "stage 3: not connected",
           score: 0,
           candidateCount: 0,
           url: null,
@@ -128,7 +224,7 @@ function makeBaseResponse(input) {
       },
       pageSpeed: {
         ok: false,
-        error: "stage 2: not connected",
+        error: "stage 3: not connected",
       },
       counts: {
         naverBlogItems: 0,
@@ -165,8 +261,8 @@ function makeBaseResponse(input) {
     diagnosis: {
       industryLabel: input.industry,
       confidence: "낮음",
-      confidenceDescription: "현재는 NAVER Blog + Shopping 연결 여부만 확인하는 2단계 검증 모드입니다.",
-      executiveSummary: "JSON 응답과 NAVER Blog/Shopping 수집 여부를 점검하는 단계입니다.",
+      confidenceDescription: "현재는 NAVER Blog + Shopping + WebKR 연결 여부만 확인하는 3단계 검증 모드입니다.",
+      executiveSummary: "JSON 응답과 NAVER Blog/Shopping/WebKR 수집 여부를 점검하는 단계입니다.",
       scores: {
         overall: 0,
         searchVisibility: 0,
@@ -178,22 +274,22 @@ function makeBaseResponse(input) {
       risks: [],
       nextActions: [],
       limits: [
-        "현재는 NAVER Blog + NAVER Shopping만 연결된 2단계 버전입니다.",
+        "현재는 NAVER Blog + NAVER Shopping + NAVER WebKR(homepage/instagram 후보)만 연결된 3단계 버전입니다.",
       ],
     },
     evidence: [],
     prescription: {
       stage: {
-        code: "naver-blog-shopping-stage-2",
-        title: "NAVER Blog + Shopping 연결 점검 단계",
-        description: "JSON 반환과 NAVER Blog/Shopping 수집만 우선 검증합니다.",
+        code: "naver-webkr-stage-3",
+        title: "NAVER WebKR 연결 점검 단계",
+        description: "JSON 반환과 NAVER Blog/Shopping/WebKR 결과 수집만 우선 검증합니다.",
       },
-      priorityChannels: ["NAVER Blog", "NAVER Shopping"],
+      priorityChannels: ["NAVER Blog", "NAVER Shopping", "NAVER WebKR"],
       thirtyDayPlan: [],
       ninetyDayPlan: [],
     },
     debug: {
-      stage: "naver-blog-shopping-stage-2",
+      stage: "naver-webkr-stage-3",
       env: {
         naverClientId: false,
         naverClientSecret: false,
@@ -201,8 +297,14 @@ function makeBaseResponse(input) {
       queries: {
         blog: [],
         shopping: [],
+        homepage: [],
+        instagram: [],
       },
       requestLog: [],
+      candidates: {
+        homepage: [],
+        instagram: [],
+      },
     },
   };
 }
@@ -214,7 +316,7 @@ async function fetchNaverJson(url, headers) {
   let data = null;
   try {
     data = text ? JSON.parse(text) : null;
-  } catch (e) {
+  } catch {
     data = null;
   }
 
@@ -239,7 +341,6 @@ async function runNaverBatch({ endpoint, queries, headers, sourceLabel, debug })
       `${endpoint}?query=${encodeURIComponent(query)}&display=10&start=1&sort=sim`;
 
     const result = await fetchNaverJson(url, headers);
-
     const items = Array.isArray(result?.data?.items) ? result.data.items : [];
     const total = n(result?.data?.total);
 
@@ -259,39 +360,11 @@ async function runNaverBatch({ endpoint, queries, headers, sourceLabel, debug })
       ...result,
     });
 
-    if (result.status === 429) {
-      break;
-    }
-
+    if (result.status === 429) break;
     await new Promise((r) => setTimeout(r, 250));
   }
 
   return rows;
-}
-
-function buildStatus(rows) {
-  const list = rows || [];
-  const rawItems = list.reduce((acc, row) => {
-    const items = Array.isArray(row?.data?.items) ? row.data.items : [];
-    return acc + items.length;
-  }, 0);
-
-  const total = list.reduce((acc, row) => acc + n(row?.data?.total), 0);
-  const errors = list
-    .map((row) => row?.error)
-    .filter(Boolean);
-
-  return {
-    fetchOk: list.length > 0 && list.every((x) => !!x.ok),
-    parseOk: list.length > 0 && list.every((x) => x.data !== null),
-    candidateFound: rawItems > 0,
-    verified: false,
-    total,
-    rawItems,
-    status: list.length ? list[list.length - 1].status : null,
-    error: errors[0] || null,
-    errorCount: errors.length,
-  };
 }
 
 function buildBlogEvidence(rows) {
@@ -351,12 +424,104 @@ function buildShoppingEvidence(rows) {
   return uniqBy(all, (x) => x.url).slice(0, 8);
 }
 
+function buildHomepageCandidates(rows, companyName) {
+  const out = [];
+
+  for (const row of rows || []) {
+    const query = s(row?.query);
+    const items = Array.isArray(row?.data?.items) ? row.data.items : [];
+
+    for (const item of items) {
+      const title = stripHtml(item?.title);
+      const snippet = stripHtml(item?.description);
+      const rawLink = s(item?.link);
+      const extracted = extractUrlsFromText(`${title} ${snippet}`);
+      const urlPool = uniqBy([rawLink, ...extracted].filter(Boolean), (x) => x);
+
+      for (const url of urlPool) {
+        if (!isHomepageCandidateUrl(url)) continue;
+
+        let score = 20;
+        const joined = `${title} ${snippet} ${url}`;
+
+        if (joined.includes(companyName)) score += 20;
+        if (joined.includes("공식")) score += 10;
+        if (joined.includes("홈페이지")) score += 10;
+
+        out.push({
+          title,
+          url: normalizeUrl(url),
+          source: "naver-webkr",
+          confidence: score >= 50 ? "medium" : "low",
+          snippet,
+          score,
+          meta: {
+            query,
+            domain: extractDomain(url),
+          },
+        });
+      }
+    }
+  }
+
+  return uniqBy(
+    out.sort((a, b) => b.score - a.score),
+    (x) => x.url
+  ).slice(0, 10);
+}
+
+function buildInstagramCandidates(rows, companyName) {
+  const out = [];
+
+  for (const row of rows || []) {
+    const query = s(row?.query);
+    const items = Array.isArray(row?.data?.items) ? row.data.items : [];
+
+    for (const item of items) {
+      const title = stripHtml(item?.title);
+      const snippet = stripHtml(item?.description);
+      const rawLink = s(item?.link);
+      const extracted = extractUrlsFromText(`${title} ${snippet}`);
+      const urlPool = uniqBy([rawLink, ...extracted].filter(Boolean), (x) => x);
+
+      for (const url of urlPool) {
+        if (!isInstagramProfileUrl(url)) continue;
+
+        let score = 20;
+        const joined = `${title} ${snippet} ${url}`;
+
+        if (joined.includes(companyName)) score += 20;
+        if (joined.includes("공식")) score += 10;
+        if (joined.toLowerCase().includes("instagram")) score += 5;
+
+        out.push({
+          title,
+          url: normalizeUrl(url),
+          source: "naver-webkr",
+          confidence: score >= 50 ? "medium" : "low",
+          snippet,
+          score,
+          meta: {
+            query,
+            domain: extractDomain(url),
+          },
+        });
+      }
+    }
+  }
+
+  return uniqBy(
+    out.sort((a, b) => b.score - a.score),
+    (x) => x.url
+  ).slice(0, 10);
+}
+
 export default async function handler(req, res) {
   if (req.method === "GET") {
     return res.status(200).json({
       ok: true,
       message: "analyze route works",
-      mode: "naver-blog-shopping-stage-2",
+      mode: "naver-webkr-stage-3",
     });
   }
 
@@ -395,40 +560,54 @@ export default async function handler(req, res) {
     response.debug.env.naverClientSecret = !!NAVER_CLIENT_SECRET;
 
     const blogQueries = uniqBy(
-      [
-        input.companyName,
-        [input.companyName, input.industry].filter(Boolean).join(" "),
-      ].filter(Boolean),
+      [input.companyName, [input.companyName, input.industry].filter(Boolean).join(" ")].filter(Boolean),
       (x) => x
     );
 
     const shoppingQueries = uniqBy(
-      [
-        input.companyName,
-        `${input.companyName} 공식`,
-      ].filter(Boolean),
+      [input.companyName, `${input.companyName} 공식`].filter(Boolean),
+      (x) => x
+    );
+
+    const homepageQueries = uniqBy(
+      [`${input.companyName} 공식`, `${input.companyName} 홈페이지`].filter(Boolean),
+      (x) => x
+    );
+
+    const instagramQueries = uniqBy(
+      [`${input.companyName} 인스타그램`, `${input.companyName} 공식 인스타`].filter(Boolean),
       (x) => x
     );
 
     response.debug.queries.blog = blogQueries;
     response.debug.queries.shopping = shoppingQueries;
+    response.debug.queries.homepage = homepageQueries;
+    response.debug.queries.instagram = instagramQueries;
 
     if (!NAVER_CLIENT_ID || !NAVER_CLIENT_SECRET) {
       response.discovery.sourceStatus.naverBlog.error =
         "NAVER_CLIENT_ID or NAVER_CLIENT_SECRET missing";
       response.discovery.sourceStatus.naverBlog.errorCount = 1;
+
       response.discovery.sourceStatus.naverShopping.error =
         "NAVER_CLIENT_ID or NAVER_CLIENT_SECRET missing";
       response.discovery.sourceStatus.naverShopping.errorCount = 1;
 
+      response.discovery.sourceStatus.naverWebHomepage.error =
+        "NAVER_CLIENT_ID or NAVER_CLIENT_SECRET missing";
+      response.discovery.sourceStatus.naverWebHomepage.errorCount = 1;
+
+      response.discovery.sourceStatus.naverWebInstagram.error =
+        "NAVER_CLIENT_ID or NAVER_CLIENT_SECRET missing";
+      response.discovery.sourceStatus.naverWebInstagram.errorCount = 1;
+
       response.diagnosis.confidence = "매우 낮음";
       response.diagnosis.confidenceDescription =
-        "NAVER 인증 정보가 없어 Blog/Shopping 검색을 수행하지 못했습니다.";
+        "NAVER 인증 정보가 없어 Blog/Shopping/WebKR 검색을 수행하지 못했습니다.";
       response.diagnosis.executiveSummary =
-        "현재는 NAVER Blog + Shopping 2단계 검증 모드이며, 인증 정보 누락으로 검색 결과를 가져오지 못했습니다.";
+        "현재는 NAVER Blog + Shopping + WebKR 3단계 검증 모드이며, 인증 정보 누락으로 검색 결과를 가져오지 못했습니다.";
       response.diagnosis.risks = [
-        "NAVER Blog API 인증 정보가 없어 검색 결과를 수집하지 못했습니다.",
-        "NAVER Shopping API 인증 정보가 없어 검색 결과를 수집하지 못했습니다.",
+        "NAVER API 인증 정보가 없어 검색 결과를 수집하지 못했습니다.",
       ];
       response.diagnosis.nextActions = [
         "Vercel 환경변수 NAVER_CLIENT_ID, NAVER_CLIENT_SECRET를 확인하세요.",
@@ -459,51 +638,144 @@ export default async function handler(req, res) {
       debug: response.debug,
     });
 
+    const homepageRows = await runNaverBatch({
+      endpoint: NAVER_WEBKR_API,
+      queries: homepageQueries,
+      headers,
+      sourceLabel: "naver-web-homepage",
+      debug: response.debug,
+    });
+
+    const instagramRows = await runNaverBatch({
+      endpoint: NAVER_WEBKR_API,
+      queries: instagramQueries,
+      headers,
+      sourceLabel: "naver-web-instagram",
+      debug: response.debug,
+    });
+
     const blogEvidence = buildBlogEvidence(blogRows);
     const shoppingEvidence = buildShoppingEvidence(shoppingRows);
-    const evidence = [...shoppingEvidence, ...blogEvidence];
+    const homepageCandidates = buildHomepageCandidates(homepageRows, input.companyName);
+    const instagramCandidates = buildInstagramCandidates(instagramRows, input.companyName);
+
+    response.debug.candidates.homepage = homepageCandidates.slice(0, 5);
+    response.debug.candidates.instagram = instagramCandidates.slice(0, 5);
 
     response.discovery.sourceStatus.naverBlog = buildStatus(blogRows);
     response.discovery.sourceStatus.naverShopping = buildStatus(shoppingRows);
+    response.discovery.sourceStatus.naverWebHomepage = buildStatus(homepageRows);
+    response.discovery.sourceStatus.naverWebInstagram = buildStatus(instagramRows);
 
     response.discovery.counts.naverBlogItems = blogEvidence.length;
     response.discovery.counts.naverShoppingItems = shoppingEvidence.length;
-    response.discovery.counts.regionHits = evidence.filter((x) =>
+    response.discovery.counts.naverWebHomepageItems = homepageCandidates.length;
+    response.discovery.counts.naverWebInstagramItems = instagramCandidates.length;
+    response.discovery.counts.regionHits = [...blogEvidence, ...shoppingEvidence].filter((x) =>
       s(x.title + " " + x.snippet).includes(input.region)
     ).length;
 
     response.discovery.rawCount.naverBlogFetched = blogEvidence.length;
     response.discovery.rawCount.naverShoppingFetched = shoppingEvidence.length;
-    response.discovery.rawCount.evidenceBuilt = evidence.length;
+    response.discovery.rawCount.naverWebHomepageFetched = homepageCandidates.length;
+    response.discovery.rawCount.naverWebInstagramFetched = instagramCandidates.length;
 
-    response.evidence = evidence.slice(0, 12);
+    const selectedHomepage = homepageCandidates[0] || null;
+    const selectedInstagram = instagramCandidates[0] || null;
+
+    if (selectedHomepage) {
+      response.discovery.assets.homepage = selectedHomepage.url;
+      response.discovery.assetDetails.homepage = {
+        title: selectedHomepage.title,
+        url: selectedHomepage.url,
+        source: selectedHomepage.source,
+        confidence: selectedHomepage.confidence,
+        snippet: selectedHomepage.snippet,
+        domain: selectedHomepage.meta.domain,
+      };
+      response.discovery.verified.homepage = {
+        found: true,
+        verified: false,
+        confidence: selectedHomepage.confidence,
+        source: selectedHomepage.source,
+        reason: "stage 3 homepage candidate",
+        score: selectedHomepage.score,
+        candidateCount: homepageCandidates.length,
+        url: selectedHomepage.url,
+        title: selectedHomepage.title,
+      };
+    } else {
+      response.discovery.verified.homepage.candidateCount = 0;
+      response.discovery.verified.homepage.reason = "homepage candidate not found";
+    }
+
+    if (selectedInstagram) {
+      response.discovery.assets.instagram = selectedInstagram.url;
+      response.discovery.assetDetails.instagram = {
+        title: selectedInstagram.title,
+        url: selectedInstagram.url,
+        source: selectedInstagram.source,
+        confidence: selectedInstagram.confidence,
+        snippet: selectedInstagram.snippet,
+        domain: selectedInstagram.meta.domain,
+      };
+      response.discovery.verified.instagram = {
+        found: true,
+        verified: false,
+        confidence: selectedInstagram.confidence,
+        source: selectedInstagram.source,
+        reason: "stage 3 instagram candidate",
+        score: selectedInstagram.score,
+        candidateCount: instagramCandidates.length,
+        url: selectedInstagram.url,
+        title: selectedInstagram.title,
+      };
+    } else {
+      response.discovery.verified.instagram.candidateCount = 0;
+      response.discovery.verified.instagram.reason = "instagram candidate not found";
+    }
+
+    response.discovery.counts.assetCount = [
+      response.discovery.assets.homepage,
+      response.discovery.assets.instagram,
+      response.discovery.assets.youtube,
+      response.discovery.assets.naverStore,
+      response.discovery.assets.map,
+    ].filter(Boolean).length;
+
+    response.evidence = [...shoppingEvidence, ...blogEvidence].slice(0, 12);
+    response.discovery.rawCount.evidenceBuilt = response.evidence.length;
 
     const hasBlog = response.discovery.sourceStatus.naverBlog.rawItems > 0;
     const hasShopping = response.discovery.sourceStatus.naverShopping.rawItems > 0;
-    const blogOk = response.discovery.sourceStatus.naverBlog.fetchOk;
-    const shoppingOk = response.discovery.sourceStatus.naverShopping.fetchOk;
+    const hasHomepageCandidate = homepageCandidates.length > 0;
+    const hasInstagramCandidate = instagramCandidates.length > 0;
 
     response.diagnosis.confidence =
-      hasBlog || hasShopping ? "보통" : "낮음";
+      hasHomepageCandidate || hasInstagramCandidate || hasBlog || hasShopping
+        ? "보통"
+        : "낮음";
 
     response.diagnosis.confidenceDescription =
-      hasBlog || hasShopping
-        ? "NAVER Blog 또는 Shopping 결과 수집이 정상적으로 수행되었습니다."
-        : "JSON은 정상이나 NAVER Blog/Shopping 결과가 부족하거나 일부 요청이 실패했습니다.";
+      hasHomepageCandidate || hasInstagramCandidate
+        ? "NAVER WebKR에서 homepage 또는 instagram 후보가 수집되었습니다."
+        : "JSON은 정상이나 WebKR 후보가 부족하거나 일부 요청이 실패했습니다.";
 
     response.diagnosis.executiveSummary =
-      hasBlog || hasShopping
-        ? `${input.companyName} 관련 NAVER Blog/Shopping 결과가 수집되었습니다. 현재는 Blog + Shopping만 연결된 2단계 검증 결과입니다.`
-        : `${input.companyName} 관련 NAVER Blog/Shopping 결과가 비어 있거나 수집이 불안정합니다.`;
+      hasHomepageCandidate || hasInstagramCandidate
+        ? `${input.companyName} 관련 NAVER Blog/Shopping 결과와 WebKR 기반 homepage·instagram 후보가 수집되었습니다.`
+        : `${input.companyName} 관련 NAVER Blog/Shopping은 일부 수집되었으나 WebKR homepage·instagram 후보는 부족합니다.`;
 
     response.diagnosis.scores = {
-      overall: hasBlog || hasShopping ? 24 : 8,
+      overall: hasHomepageCandidate || hasInstagramCandidate ? 32 : 20,
       searchVisibility:
-        (hasBlog ? 20 : 0) +
-        (hasShopping ? 20 : 0),
+        (hasBlog ? 15 : 0) +
+        (hasShopping ? 15 : 0) +
+        (hasHomepageCandidate ? 15 : 0) +
+        (hasInstagramCandidate ? 10 : 0),
       contentPresence: 0,
       localExposure: response.discovery.counts.regionHits > 0 ? 12 : 0,
-      webQuality: 0,
+      webQuality: hasHomepageCandidate ? 10 : 0,
     };
 
     response.diagnosis.wins = [];
@@ -513,21 +785,22 @@ export default async function handler(req, res) {
     if (hasShopping) {
       response.diagnosis.wins.push("NAVER Shopping 검색 결과가 실제로 수집되고 있습니다.");
     }
+    if (hasHomepageCandidate) {
+      response.diagnosis.wins.push("NAVER WebKR에서 homepage 후보가 수집되고 있습니다.");
+    }
+    if (hasInstagramCandidate) {
+      response.diagnosis.wins.push("NAVER WebKR에서 instagram 후보가 수집되고 있습니다.");
+    }
 
     response.diagnosis.risks = [
-      "현재는 NAVER Blog + Shopping만 연결되어 있어 공식 홈페이지·인스타그램·유튜브 판별은 아직 불가능합니다.",
+      "현재 homepage/instagram은 WebKR 후보 단계이며 아직 공식성 검증은 하지 않습니다.",
+      "YouTube, PageSpeed, 지도 자산은 아직 연결되지 않았습니다.",
     ];
 
-    if (!blogOk) {
-      response.diagnosis.risks.push("NAVER Blog 요청 중 일부가 실패했을 수 있습니다.");
-    }
-    if (!shoppingOk) {
-      response.diagnosis.risks.push("NAVER Shopping 요청 중 일부가 실패했을 수 있습니다.");
-    }
-
     response.diagnosis.nextActions = [
-      "이 단계가 정상이면 다음으로 NAVER WebKR(homepage/instagram 후보)을 붙이세요.",
-      "프론트에서 sourceStatus.naverBlog, sourceStatus.naverShopping, evidence 배열이 보이는지 확인하세요.",
+      "이 단계가 정상이면 다음으로 YouTube 후보 수집을 붙이세요.",
+      "프론트에서 discovery.assets.homepage, discovery.assets.instagram 값이 들어오는지 확인하세요.",
+      "debug.candidates.homepage, debug.candidates.instagram 상위 후보가 기대한 값인지 확인하세요.",
     ];
 
     return res.status(200).json(response);
