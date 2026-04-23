@@ -340,7 +340,18 @@ function compactEvidenceForLLM(evidence = []) {
   }));
 }
 
-async function generateStrategicDiagnosisLLM({
+function compactEvidenceForLLM(evidence = []) {
+  return (Array.isArray(evidence) ? evidence : []).slice(0, 14).map((x) => ({
+    type: x?.type || null,
+    title: stripHtml(x?.title || ""),
+    url: normUrl(x?.url || ""),
+    source: x?.source || null,
+    mallName: x?.mallName || null,
+    subscriberCount: Number.isFinite(Number(x?.subscriberCount)) ? Number(x.subscriberCount) : null,
+  }));
+}
+
+async function generateStrategicDiagnosisGemini({
   companyName,
   industry,
   region,
@@ -348,10 +359,10 @@ async function generateStrategicDiagnosisLLM({
   score,
   evidence,
 }) {
-  const apiKey = env("OPENAI_API_KEY");
+  const apiKey = env("GEMINI_API_KEY", "GOOGLE_API_KEY");
   if (!apiKey) return null;
 
-  const model = env("OPENAI_MODEL") || "gpt-4.1-mini";
+  const model = env("GEMINI_MODEL") || "gemini-2.5-flash";
 
   const inputPayload = {
     company: { companyName, industry, region },
@@ -364,58 +375,48 @@ async function generateStrategicDiagnosisLLM({
     evidence: compactEvidenceForLLM(evidence),
   };
 
-  const schema = {
+  const responseJsonSchema = {
     type: "object",
-    additionalProperties: false,
     properties: {
       executiveSummary: { type: "string" },
       wins: {
         type: "array",
-        items: { type: "string" },
-        maxItems: 6
+        items: { type: "string" }
       },
       risks: {
         type: "array",
-        items: { type: "string" },
-        maxItems: 6
+        items: { type: "string" }
       },
       nextActions: {
         type: "array",
-        items: { type: "string" },
-        maxItems: 6
+        items: { type: "string" }
       },
       limits: {
         type: "array",
-        items: { type: "string" },
-        maxItems: 4
+        items: { type: "string" }
       },
       priorities: {
         type: "array",
-        maxItems: 4,
         items: {
           type: "object",
-          additionalProperties: false,
           properties: {
             rank: { type: "integer" },
             title: { type: "string" },
             whyNow: { type: "string" },
             channels: {
               type: "array",
-              items: { type: "string" },
-              maxItems: 6
+              items: { type: "string" }
             },
             actions: {
               type: "array",
-              items: { type: "string" },
-              maxItems: 6
+              items: { type: "string" }
             },
             budgetKRW: { type: "string" },
             expectedOutcome: { type: "string" },
             expectedROI: { type: "string" },
             kpis: {
               type: "array",
-              items: { type: "string" },
-              maxItems: 8
+              items: { type: "string" }
             }
           },
           required: [
@@ -442,71 +443,58 @@ async function generateStrategicDiagnosisLLM({
     ]
   };
 
-  const systemPrompt = [
-    "You are a senior Korean digital marketing strategist for ecommerce brands.",
-    "Use ONLY the provided collected facts.",
-    "Do NOT invent official assets that were not verified.",
-    "If PageSpeed failed, treat site performance as unknown, not automatically bad.",
-    "If NAVER Store is missing, explain lower-funnel weakness and NAVER defense need.",
-    "Give practical channel-specific strategy for Korea.",
-    "Budget must be monthly KRW ranges, conservative and realistic.",
-    "ROI/ROAS must be ranges with assumptions, not guarantees.",
-    "Make output insightful, not generic."
-  ].join(" ");
-
-  const userPrompt = `
-아래 수집 결과를 바탕으로 마케팅 전략을 재분석하세요.
+  const prompt = `
+당신은 한국 이커머스 브랜드 전문 시니어 디지털 마케팅 전략가입니다.
 
 반드시 지켜야 할 규칙:
-1. verified=true 인 자산만 '확인된 공식 자산'으로 취급
-2. verified=false 인 자산은 "후보" 또는 "미확인"으로 표현
-3. 점수(score)는 사실로 받아들이되, 의미를 해석해서 우선순위를 정할 것
-4. 예산은 월 기준 KRW 범위로 제시
-5. expectedROI 는 "직접 ROAS", "blended ROI", "CPA 개선" 같은 보수적 표현으로 제시
-6. nextActions 는 운영자가 바로 실행 가능한 문장으로 작성
-7. priorities 는 rank 1~4로 작성
-8. 너무 짧게 쓰지 말고, 근거 기반으로 구체적으로 작성
+1. 아래 제공된 수집 결과만 근거로 해석할 것
+2. verified=true 인 자산만 '확인된 공식 자산'으로 표현할 것
+3. verified=false 인 자산은 '후보' 또는 '미확인'으로 표현할 것
+4. PageSpeed 실패는 '성능 나쁨' 확정이 아니라 '미확인'으로 해석할 것
+5. NAVER Store가 없으면 네이버 하단 퍼널 약점과 브랜드 방어 필요성을 설명할 것
+6. 예산은 월 기준 KRW 범위로 제시할 것
+7. ROI/ROAS는 보수적 범위로 제시하고 보장처럼 쓰지 말 것
+8. 너무 일반론적으로 쓰지 말고, 점수/근거/채널 상태를 연결해서 설명할 것
+9. 한국 시장 기준의 실무적인 채널 제안으로 작성할 것
 
 입력 데이터:
 ${JSON.stringify(inputPayload, null, 2)}
 `;
 
   try {
-    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+    const r = await fetch(url, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
-        ],
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "marketing_reanalysis",
-            strict: true,
-            schema
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: prompt }]
           }
-        },
-        temperature: 0.4
+        ],
+        generationConfig: {
+          temperature: 0.4,
+          responseMimeType: "application/json",
+          responseJsonSchema
+        }
       })
     });
 
     const json = await r.json();
-    const content = json?.choices?.[0]?.message?.content;
-    if (!r.ok || !content) {
-      return null;
-    }
+    const text = json?.candidates?.[0]?.content?.parts?.map(p => p?.text || "").join("") || "";
 
-    return JSON.parse(content);
+    if (!r.ok || !text) return null;
+
+    return JSON.parse(text);
   } catch (e) {
     return null;
   }
 }
+
 
 function buildEvidence(blogItems, shopItems, webHome, webIg, ytCh) {
   const a = [];
