@@ -560,7 +560,7 @@ async function generateStrategicDiagnosisGemini({ companyName, industry, region,
     required: ["executiveSummary", "wins", "risks", "nextActions", "limits", "priorities"],
   };
 
-  const prompt = `당신은 한국 이커머스 브랜드 전문 시니어 디지털 마케팅 전략가입니다.
+  const prompt = `당신은 한국 디지털 마케팅 전문 시니어 전략가이다. 주어진 정보들을 기반으로 앞으로 어떻게 디지털 마케팅 점수를 높여나갈 수 있을지 해결책을 제시해야 한다. 유튜브 점수가 낮다, 점수를 높여라가 아닌, 컨텐츠의 어떤 부분이 부실하고 어떻게 운영해야 스코어를 높일 수 있을지 인사이트를 뽑아내야 한다.검색되어 제공된 정보들을 기반으로 하나씩 깊게 분석해서 인사이트를 제공하라.
 
 반드시 지켜야 할 규칙:
 1. 아래 제공된 수집 결과만 근거로 해석할 것
