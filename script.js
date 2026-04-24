@@ -407,7 +407,7 @@ window.addEventListener("DOMContentLoaded", () => {
     section.innerHTML = `
       <h3 class="deep-analysis-title">심층분석 요청하기 - 무료</h3>
       <p class="deep-analysis-desc">
-        현재 진단 결과를 바탕으로 더 구체적인 마케팅 전략, 예산 설계, 채널 운영 방향이 필요하다면 심층분석을 요청하세요. 2 영업일 이내 메일로 분석결과를 보내드립니다.
+        현재 진단 결과를 바탕으로 더 구체적인 마케팅 전략, 예산 설계, 채널 운영 방향이 필요하다면 심층분석을 요청하세요. <br> 2 영업일 이내 메일로 분석결과를 보내드립니다.
       </p>
       <textarea
         id="deepAnalysisNote"
